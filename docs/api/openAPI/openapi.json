@@ -1,0 +1,1524 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "ICS-Guard API",
+    "description": "ICS-Guard系统中使用的，应用层与控制层交互的API，包括用于配置和控制操作的RESTful API。",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "本地开发环境"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "Node": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "节点唯一标识符"
+          },
+          "name": {
+            "type": "string",
+            "description": "节点名称"
+          },
+          "type": {
+            "type": "string",
+            "description": "节点类型 (例如: switch, plc, honeypot)"
+          },
+          "ip": {
+            "type": "string",
+            "description": "节点IP地址"
+          },
+          "status": {
+            "type": "string",
+            "description": "节点状态 (例如: online, offline, maintenance)"
+          }
+        }
+      },
+      "Link": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "连接唯一标识符"
+          },
+          "source": {
+            "type": "string",
+            "description": "源节点ID"
+          },
+          "target": {
+            "type": "string",
+            "description": "目标节点ID"
+          },
+          "bandwidth": {
+            "type": "number",
+            "description": "带宽 (Mbps)"
+          },
+          "status": {
+            "type": "string",
+            "description": "连接状态 (例如: active, inactive, degraded)"
+          }
+        }
+      },
+      "NodeStatus": {
+        "type": "object",
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "description": "节点ID"
+          },
+          "status": {
+            "type": "string",
+            "description": "当前状态"
+          },
+          "last_updated": {
+            "type": "string",
+            "description": "最后更新时间 (ISO 8601格式)"
+          },
+          "metrics": {
+            "type": "object",
+            "properties": {
+              "cpu_usage": {
+                "type": "number",
+                "description": "CPU使用率 (%)"
+              },
+              "memory_usage": {
+                "type": "number",
+                "description": "内存使用率 (%)"
+              },
+              "network_throughput": {
+                "type": "number",
+                "description": "网络吞吐量 (Mbps)"
+              }
+            }
+          }
+        }
+      },
+      "LinkStatus": {
+        "type": "object",
+        "properties": {
+          "link_id": {
+            "type": "string",
+            "description": "连接ID"
+          },
+          "status": {
+            "type": "string",
+            "description": "当前状态"
+          },
+          "last_updated": {
+            "type": "string",
+            "description": "最后更新时间 (ISO 8601格式)"
+          },
+          "metrics": {
+            "type": "object",
+            "properties": {
+              "bandwidth_usage": {
+                "type": "number",
+                "description": "带宽使用率 (%)"
+              },
+              "latency": {
+                "type": "number",
+                "description": "延迟 (ms)"
+              },
+              "packet_loss": {
+                "type": "number",
+                "description": "丢包率 (%)"
+              }
+            }
+          }
+        }
+      },
+      "Flow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "流唯一标识符"
+          },
+          "src_ip": {
+            "type": "string",
+            "description": "源IP地址"
+          },
+          "dst_ip": {
+            "type": "string",
+            "description": "目的IP地址"
+          },
+          "src_port": {
+            "type": "number",
+            "description": "源端口号"
+          },
+          "dst_port": {
+            "type": "number",
+            "description": "目的端口号"
+          },
+          "protocol": {
+            "type": "string",
+            "description": "协议类型"
+          },
+          "start_time": {
+            "type": "string",
+            "description": "流开始时间 (ISO 8601格式)"
+          },
+          "end_time": {
+            "type": "string",
+            "description": "流结束时间 (ISO 8601格式)"
+          },
+          "duration": {
+            "type": "number",
+            "description": "流持续时间(秒)"
+          },
+          "pkt_count": {
+            "type": "number",
+            "description": "包数量"
+          },
+          "byte_count": {
+            "type": "number",
+            "description": "字节数"
+          },
+          "pkt_rate": {
+            "type": "number",
+            "description": "包率 (pkt/s)"
+          },
+          "byte_rate": {
+            "type": "number",
+            "description": "字节率 (bytes/s)"
+          },
+          "func_code_entropy": {
+            "type": "number",
+            "description": "功能码熵"
+          },
+          "reg_addr_std": {
+            "type": "number",
+            "description": "目标寄存器地址标准差"
+          },
+          "status": {
+            "type": "string",
+            "description": "流状态 (active, inactive, completed)"
+          }
+        }
+      },
+      "Policy": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "策略唯一标识符"
+          },
+          "name": {
+            "type": "string",
+            "description": "策略名称"
+          },
+          "description": {
+            "type": "string",
+            "description": "策略描述"
+          },
+          "type": {
+            "type": "string",
+            "description": "策略类型 (node, connection, flow)"
+          },
+          "subtype": {
+            "type": "string",
+            "description": "策略子类型 (例如: access_control, bandwidth_control, anomaly_blocking)"
+          },
+          "status": {
+            "type": "string",
+            "description": "策略状态 (active, disabled, pending)"
+          },
+          "priority": {
+            "type": "number",
+            "description": "策略优先级，数值越小优先级越高"
+          },
+          "scope": {
+            "type": "object",
+            "properties": {
+              "target_type": {
+                "type": "string",
+                "description": "目标类型 (device, ip_range, vlan, protocol)"
+              },
+              "target_identifier": {
+                "type": "string",
+                "description": "目标标识符"
+              },
+              "target_ip": {
+                "type": "string",
+                "description": "目标IP地址 (可选)"
+              },
+              "target_mac": {
+                "type": "string",
+                "description": "目标MAC地址 (可选)"
+              },
+              "device_type": {
+                "type": "string",
+                "description": "设备类型 (PLC, HMI, SCADA, RTU, sensor) (可选)"
+              }
+            }
+          },
+          "conditions": {
+            "type": "object",
+            "properties": {
+              "time_window": {
+                "type": "object",
+                "properties": {
+                  "start_time": {
+                    "type": "string",
+                    "description": "开始时间 (HH:MM格式)"
+                  },
+                  "end_time": {
+                    "type": "string",
+                    "description": "结束时间 (HH:MM格式)"
+                  },
+                  "days": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "生效日期 (monday, tuesday, wednesday, thursday, friday, saturday, sunday)"
+                  }
+                }
+              },
+              "trigger_thresholds": {
+                "type": "object",
+                "properties": {
+                  "packet_rate": {
+                    "type": "number",
+                    "description": "包率阈值 (包/秒)"
+                  },
+                  "byte_rate": {
+                    "type": "number",
+                    "description": "字节率阈值 (字节/秒)"
+                  },
+                  "connection_count": {
+                    "type": "number",
+                    "description": "连接数阈值"
+                  },
+                  "duration_seconds": {
+                    "type": "number",
+                    "description": "持续时间阈值 (秒)"
+                  },
+                  "function_code_entropy": {
+                    "type": "number",
+                    "description": "功能码熵阈值"
+                  }
+                }
+              },
+              "protocol_specific": {
+                "type": "object",
+                "properties": {
+                  "allowed_function_codes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "允许的功能码列表"
+                  },
+                  "denied_function_codes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "拒绝的功能码列表"
+                  },
+                  "register_ranges": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "start_address": {
+                          "type": "number",
+                          "description": "起始地址"
+                        },
+                        "end_address": {
+                          "type": "number",
+                          "description": "结束地址"
+                        },
+                        "access_type": {
+                          "type": "string",
+                          "description": "访问类型 (read_only, read_write)"
+                        }
+                      }
+                    },
+                    "description": "寄存器范围列表"
+                  }
+                }
+              }
+            }
+          },
+          "actions": {
+            "type": "object",
+            "properties": {
+              "primary_action": {
+                "type": "string",
+                "description": "主要动作 (allow, block, redirect, throttle, isolate, shutdown, disable, terminate)"
+              },
+              "secondary_actions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "action_type": {
+                      "type": "string",
+                      "description": "动作类型 (log, redirect, alert)"
+                    },
+                    "log_level": {
+                      "type": "string",
+                      "description": "日志级别 (info, warning, alert, critical) (仅当action_type为log时)"
+                    },
+                    "log_message": {
+                      "type": "string",
+                      "description": "日志消息 (仅当action_type为log时)"
+                    },
+                    "redirect_target": {
+                      "type": "string",
+                      "description": "重定向目标 (仅当action_type为redirect时)"
+                    },
+                    "redirect_condition": {
+                      "type": "string",
+                      "description": "重定向条件 (仅当action_type为redirect时)"
+                    },
+                    "alert_level": {
+                      "type": "string",
+                      "description": "告警级别 (low, medium, high, critical) (仅当action_type为alert时)"
+                    },
+                    "notification_channels": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "通知渠道 (email, sms, syslog) (仅当action_type为alert时)"
+                    }
+                  }
+                },
+                "description": "次要动作列表"
+              },
+              "recovery_action": {
+                "type": "string",
+                "description": "恢复动作 (例如: auto_disable_after_5min)"
+              },
+              "rate_limit": {
+                "type": "object",
+                "properties": {
+                  "bandwidth_mbps": {
+                    "type": "number",
+                    "description": "带宽限制 (Mbps)"
+                  },
+                  "packets_per_second": {
+                    "type": "number",
+                    "description": "包速率限制 (包/秒)"
+                  },
+                  "burst_size": {
+                    "type": "number",
+                    "description": "突发大小"
+                  }
+                }
+              }
+            }
+          },
+          "monitoring": {
+            "type": "object",
+            "properties": {
+              "enable_statistics": {
+                "type": "boolean",
+                "description": "是否启用统计"
+              },
+              "sample_interval_seconds": {
+                "type": "number",
+                "description": "采样间隔 (秒)"
+              },
+              "alert_thresholds": {
+                "type": "object",
+                "properties": {
+                  "cpu_usage_percent": {
+                    "type": "number",
+                    "description": "CPU使用率阈值 (%)"
+                  },
+                  "memory_usage_percent": {
+                    "type": "number",
+                    "description": "内存使用率阈值 (%)"
+                  },
+                  "disk_usage_percent": {
+                    "type": "number",
+                    "description": "磁盘使用率阈值 (%)"
+                  },
+                  "connection_attempts": {
+                    "type": "number",
+                    "description": "连接尝试次数阈值"
+                  }
+                }
+              },
+              "health_check_interval": {
+                "type": "number",
+                "description": "健康检查间隔 (秒)"
+              }
+            }
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "created_by": {
+                "type": "string",
+                "description": "创建者"
+              },
+              "created_at": {
+                "type": "string",
+                "description": "创建时间 (ISO 8601格式)"
+              },
+              "updated_at": {
+                "type": "string",
+                "description": "更新时间 (ISO 8601格式)"
+              },
+              "version": {
+                "type": "number",
+                "description": "版本号"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "标签列表"
+              },
+              "risk_level": {
+                "type": "string",
+                "description": "风险级别 (low, medium, high, critical)"
+              },
+              "compliance_requirements": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "合规要求 (例如: IEC62443, NIST_SP800-82)"
+              }
+            }
+          }
+        }
+      },
+      "ApiResponse": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "请求状态码，成功时为HTTP状态码200，失败时为具体的错误码。"
+          },
+          "message": {
+            "type": "string",
+            "description": "人类可读的状态描述。"
+          },
+          "metadata": {
+            "type": "object",
+            "properties": {
+              "timestamp": {
+                "type": "string",
+                "description": "请求处理时间"
+              }
+            }
+          },
+          "data": {
+            "type": "object",
+            "description": "请求成功时包含的实际数据，失败时为空。"
+          }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "访问令牌"
+          },
+          "token_type": {
+            "type": "string",
+            "description": "令牌类型"
+          },
+          "expires_in": {
+            "type": "number",
+            "description": "令牌过期时间（秒）"
+          },
+          "refresh_token": {
+            "type": "string",
+            "description": "刷新令牌"
+          }
+        }
+      },
+      "TokenVerificationResponse": {
+        "type": "object",
+        "properties": {
+          "valid": {
+            "type": "boolean",
+            "description": "令牌是否有效"
+          },
+          "client_id": {
+            "type": "string",
+            "description": "客户端ID"
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "令牌过期时间"
+          }
+        }
+      },
+      "RevokeTokenResponse": {
+        "type": "object",
+        "properties": {
+          "revoked": {
+            "type": "boolean",
+            "description": "令牌是否已撤销"
+          }
+        }
+      },
+      "TopologyResponse": {
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Node"
+            },
+            "description": "节点列表"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Link"
+            },
+            "description": "连接列表"
+          }
+        }
+      },
+      "OperationResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "操作状态"
+          },
+          "message": {
+            "type": "string",
+            "description": "操作结果描述"
+          },
+          "node_id": {
+            "type": "string",
+            "description": "节点ID（仅节点操作）"
+          },
+          "link_id": {
+            "type": "string",
+            "description": "连接ID（仅连接操作）"
+          },
+          "policy_id": {
+            "type": "string",
+            "description": "策略ID（仅策略操作）"
+          }
+        }
+      },
+      "PolicyListResponse": {
+        "type": "object",
+        "properties": {
+          "policies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "策略ID"
+                },
+                "name": {
+                  "type": "string",
+                  "description": "策略名称"
+                },
+                "type": {
+                  "type": "string",
+                  "description": "策略类型"
+                },
+                "status": {
+                  "type": "string",
+                  "description": "策略状态"
+                },
+                "priority": {
+                  "type": "number",
+                  "description": "策略优先级"
+                },
+                "metadata": {
+                  "type": "object",
+                  "properties": {
+                    "created_at": {
+                      "type": "string",
+                      "description": "创建时间"
+                    }
+                  }
+                }
+              }
+            },
+            "description": "策略列表"
+          }
+        }
+      },
+      "NodeStats": {
+        "type": "object",
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "description": "节点ID"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "统计时间"
+          },
+          "cpu_usage": {
+            "type": "number",
+            "description": "CPU使用率 (%)"
+          },
+          "memory_usage": {
+            "type": "number",
+            "description": "内存使用率 (%)"
+          },
+          "network_throughput": {
+            "type": "number",
+            "description": "网络吞吐量 (Mbps)"
+          }
+        }
+      },
+      "LinkStats": {
+        "type": "object",
+        "properties": {
+          "link_id": {
+            "type": "string",
+            "description": "连接ID"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "统计时间"
+          },
+          "bandwidth_usage": {
+            "type": "number",
+            "description": "带宽使用率 (%)"
+          },
+          "latency": {
+            "type": "number",
+            "description": "延迟 (ms)"
+          },
+          "packet_loss": {
+            "type": "number",
+            "description": "丢包率 (%)"
+          }
+        }
+      },
+      "Alert": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "告警ID"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "告警时间"
+          },
+          "type": {
+            "type": "string",
+            "description": "告警类型"
+          },
+          "severity": {
+            "type": "string",
+            "description": "告警级别 (low, medium, high)"
+          },
+          "source_ip": {
+            "type": "string",
+            "description": "源IP地址"
+          },
+          "description": {
+            "type": "string",
+            "description": "告警描述"
+          }
+        }
+      },
+      "HoneypotLog": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "日志ID"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "日志时间"
+          },
+          "source_ip": {
+            "type": "string",
+            "description": "源IP地址"
+          },
+          "request": {
+            "type": "string",
+            "description": "请求内容"
+          },
+          "response": {
+            "type": "string",
+            "description": "响应内容"
+          }
+        }
+      },
+      "NetworkStatusUpdate": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "description": "事件类型",
+            "example": "network_status_update"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "事件时间"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "node_id": {
+                "type": "string",
+                "description": "节点ID"
+              },
+              "status": {
+                "type": "string",
+                "description": "节点状态"
+              }
+            }
+          }
+        }
+      },
+      "TrafficAnomaly": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "description": "事件类型",
+            "example": "traffic_anomaly"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "事件时间"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "flow_id": {
+                "type": "string",
+                "description": "流ID"
+              },
+              "src_ip": {
+                "type": "string",
+                "description": "源IP地址"
+              },
+              "dst_ip": {
+                "type": "string",
+                "description": "目的IP地址"
+              },
+              "anomaly_score": {
+                "type": "number",
+                "description": "异常分数"
+              },
+              "details": {
+                "type": "string",
+                "description": "异常详情"
+              }
+            }
+          }
+        }
+      },
+      "HoneypotInteraction": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "description": "事件类型",
+            "example": "honeypot_interaction"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "事件时间"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "source_ip": {
+                "type": "string",
+                "description": "源IP地址"
+              },
+              "request": {
+                "type": "string",
+                "description": "请求内容"
+              },
+              "timestamp": {
+                "type": "string",
+                "description": "交互时间"
+              }
+            }
+          }
+        }
+      },
+      "TopologyChange": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "description": "事件类型",
+            "example": "topology_change"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "事件时间"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "change_type": {
+                "type": "string",
+                "description": "变更类型"
+              },
+              "details": {
+                "type": "object",
+                "description": "变更详情"
+              }
+            }
+          }
+        }
+      },
+      "FlowUpdate": {
+        "type": "object",
+        "properties": {
+          "event": {
+            "type": "string",
+            "description": "事件类型",
+            "example": "flow_update"
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "事件时间"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "flow": {
+                "$ref": "#/components/schemas/Flow"
+              }
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "paths": {
+    "/auth/token": {
+      "post": {
+        "summary": "获取访问令牌",
+        "description": "应用层向认证中心请求初始访问令牌",
+        "tags": ["认证"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "client_id": {
+                    "type": "string",
+                    "description": "客户端ID"
+                  },
+                  "client_secret": {
+                    "type": "string",
+                    "description": "客户端密钥"
+                  }
+                },
+                "required": ["client_id", "client_secret"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功获取令牌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少必需参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "客户端凭证无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "get": {
+        "summary": "刷新访问令牌",
+        "description": "使用刷新令牌获取新的访问令牌。刷新令牌通过Authorization头部传递。",
+        "tags": ["认证"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功刷新令牌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少必需参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "刷新令牌无效或过期",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/verify": {
+      "post": {
+        "summary": "验证令牌",
+        "description": "控制器验证令牌有效性",
+        "tags": ["认证"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "description": "要验证的令牌"
+                  }
+                },
+                "required": ["token"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "令牌验证结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenVerificationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少必需参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "令牌无效或过期",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/revoke": {
+      "post": {
+        "summary": "撤销令牌",
+        "description": "主动撤销令牌（用于安全退出或紧急情况）",
+        "tags": ["认证"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "description": "要撤销的令牌"
+                  }
+                },
+                "required": ["token"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "令牌撤销结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevokeTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少必需参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "令牌无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/topology": {
+      "get": {
+        "summary": "获取网络拓扑信息",
+        "description": "获取当前网络拓扑信息，包括所有节点和连接关系",
+        "tags": ["拓扑管理"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "网络拓扑信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopologyResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nodes/{node_id}/status": {
+      "get": {
+        "summary": "获取节点状态",
+        "description": "获取特定节点的实时状态信息",
+        "tags": ["状态监控"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "description": "节点唯一标识符",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "节点状态信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/links/{link_id}/status": {
+      "get": {
+        "summary": "获取连接状态",
+        "description": "获取特定连接的实时状态信息",
+        "tags": ["状态监控"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "description": "连接唯一标识符",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "连接状态信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nodes/{node_id}/start": {
+      "post": {
+        "summary": "启动节点",
+        "description": "启动指定节点",
+        "tags": ["节点操作"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "description": "节点唯一标识符",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "节点启动结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nodes/{node_id}/stop": {
+      "post": {
+        "summary": "停止节点",
+        "description": "停止指定节点",
+        "tags": ["节点操作"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "description": "节点唯一标识符",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "节点停止结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/nodes/{node_id}/restart": {
+      "post": {
+        "summary": "重启节点",
+        "description": "重启指定节点",
+        "tags": ["节点操作"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "node_id",
+            "in": "path",
+            "required": true,
+            "description": "节点唯一标识符",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "节点重启结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/links/{link_id}/enable": {
+      "post": {
+        "summary": "启用连接",
+        "description": "启用指定连接",
+        "tags": ["连接操作"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "description": "连接唯一标识符",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "连接启用结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/links/{link_id}/disable": {
+      "post": {
+        "summary": "禁用连接",
+        "description": "禁用指定连接",
+        "tags": ["连接操作"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "description": "连接唯一标识符",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "连接禁用结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/policies": {
+      "post": {
+        "summary": "创建策略",
+        "description": "创建新的策略",
+        "tags": ["策略管理"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "policy": {
+                    "$ref": "#/components/schemas/Policy"
+                  }
+                },
+                "required": ["policy"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "策略创建结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "列出所有策略",
+        "description": "获取所有策略的列表",
+        "tags": ["策略管理"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "type",
+            "in": "query",
+            "description": "策略类型 (node, connection, flow)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "策略状态 (active, disabled, pending)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "策略列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PolicyListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/policies/{policy_id}": {
+      "get": {
+        "summary": "获取策略",
+        "description": "获取指定策略的详细信息",
+        "tags": ["策略管理"],
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "policy_id",
+            "in": "path",
+            "required": true,
+            "description": "策略唯一标识符",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "策略详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "policy": {
+                      "$ref": "#/components/schemas/Policy"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
