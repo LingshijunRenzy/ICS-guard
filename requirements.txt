@@ -13,3 +13,7 @@ torch>=2.3.0
 websockets>=12.0
 requests>=2.32.0
 
+# 测试依赖
+pytest>=8.0.0
+responses>=0.25.0
+
