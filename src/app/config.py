@@ -25,11 +25,11 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "CONTROLLER_CLIENT_ID": "",
     "CONTROLLER_CLIENT_SECRET": "",
     "CONTROLLER_WS_BASE_URL": "ws://localhost:8000",
-    # 模型与推理
+    # 模型与推理（默认指向最新一次训练输出，可通过环境变量覆盖）
     "MODEL_DIR": "models",
-    "MODEL_FILE": "lightgbm_model.pkl",
-    "FEATURES_FILE": "features.json",
-    "THRESHOLDS_FILE": "thresholds.json",
+    "MODEL_FILE": "251222_174624_lightgbm_model.pkl",
+    "FEATURES_FILE": "251222_174624_features.json",
+    "THRESHOLDS_FILE": "251222_174624_thresholds.json",
     # 推理阈值（默认值，可被配置文件覆盖）
     "THRESHOLD_ALERT": 0.3,
     "THRESHOLD_THROTTLE": 0.6,

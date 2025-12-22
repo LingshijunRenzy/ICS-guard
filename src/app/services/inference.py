@@ -19,6 +19,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
+import joblib
 import numpy as np
 import pandas as pd
 
@@ -194,11 +195,10 @@ class InferenceService:
         with self._lock:
             success = True
 
-            # 加载模型
+            # 加载模型（使用 joblib 与训练脚本保持一致）
             if model_path and os.path.exists(model_path):
                 try:
-                    with open(model_path, "rb") as f:
-                        self._model = pickle.load(f)
+                    self._model = joblib.load(model_path)
                     logger.info("Model loaded from %s", model_path)
                 except Exception as e:
                     logger.error("Failed to load model: %s", e)
@@ -212,7 +212,14 @@ class InferenceService:
                 try:
                     with open(features_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
-                    self._feature_config = FeatureConfig.from_dict(data)
+                    # 兼容两种格式：
+                    # 1) 旧版：{"feature_columns": [...], ...}
+                    # 2) 新版训练脚本导出：["col1", "col2", ...]
+                    if isinstance(data, list):
+                        cfg_dict = {"feature_columns": data}
+                    else:
+                        cfg_dict = data
+                    self._feature_config = FeatureConfig.from_dict(cfg_dict)
                     logger.info("Feature config loaded from %s", features_path)
                 except Exception as e:
                     logger.error("Failed to load feature config: %s", e)
