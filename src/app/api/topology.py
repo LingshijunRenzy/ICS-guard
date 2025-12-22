@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 from flask import Blueprint, current_app, jsonify
 
 from .schemas import Link, LinkStatus, Node, NodeStatus, TopologyResponse
+from ..auth import require_permissions
 from ..services.controller_client import (
     ControllerClient,
     ControllerClientError,
@@ -212,6 +213,7 @@ def get_link_status(link_id: str):
 
 
 @bp.post("/nodes/<string:node_id>/start")
+@require_permissions("node:control")
 def start_node(node_id: str):
     """
     启动节点。
@@ -229,6 +231,7 @@ def start_node(node_id: str):
 
 
 @bp.post("/nodes/<string:node_id>/stop")
+@require_permissions("node:control")
 def stop_node(node_id: str):
     """
     停止节点。
@@ -246,6 +249,7 @@ def stop_node(node_id: str):
 
 
 @bp.post("/nodes/<string:node_id>/restart")
+@require_permissions("node:control")
 def restart_node(node_id: str):
     """
     重启节点。
@@ -268,6 +272,7 @@ def restart_node(node_id: str):
 
 
 @bp.post("/links/<string:link_id>/enable")
+@require_permissions("link:control")
 def enable_link(link_id: str):
     """
     启用连接。
@@ -285,6 +290,7 @@ def enable_link(link_id: str):
 
 
 @bp.post("/links/<string:link_id>/disable")
+@require_permissions("link:control")
 def disable_link(link_id: str):
     """
     禁用连接。

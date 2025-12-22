@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from flask import Blueprint, jsonify, request
 
 from .schemas import PolicyDetail, PolicySummary
+from ..auth import require_permissions
 from ..services.controller_client import (
     ControllerClientError,
     get_controller_client,
@@ -123,6 +124,7 @@ def _demo_policy_detail(policy_id: str) -> PolicyDetail:
 
 
 @bp.get("")
+@require_permissions("policy:read")
 def list_policies():
     """
     列出所有策略。
@@ -155,6 +157,7 @@ def list_policies():
 
 
 @bp.get("/<string:policy_id>")
+@require_permissions("policy:read")
 def get_policy(policy_id: str):
     """
     获取策略详情。
@@ -174,6 +177,7 @@ def get_policy(policy_id: str):
 
 
 @bp.post("")
+@require_permissions("policy:write")
 def create_policy():
     """
     创建策略。
@@ -209,6 +213,7 @@ def create_policy():
 
 
 @bp.put("/<string:policy_id>")
+@require_permissions("policy:write")
 def update_policy(policy_id: str):
     """
     更新策略。
@@ -242,6 +247,7 @@ def update_policy(policy_id: str):
 
 
 @bp.delete("/<string:policy_id>")
+@require_permissions("policy:write")
 def delete_policy(policy_id: str):
     """
     删除策略。
@@ -267,6 +273,7 @@ def delete_policy(policy_id: str):
 
 
 @bp.post("/<string:policy_id>/apply")
+@require_permissions("policy:execute")
 def apply_policy(policy_id: str):
     """
     应用策略到目标对象。
@@ -306,6 +313,7 @@ def apply_policy(policy_id: str):
 
 
 @bp.post("/<string:policy_id>/revoke")
+@require_permissions("policy:execute")
 def revoke_policy(policy_id: str):
     """
     撤销已应用的策略。

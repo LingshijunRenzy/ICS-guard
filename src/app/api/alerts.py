@@ -10,6 +10,7 @@ from typing import Any, List, Optional
 from flask import Blueprint, jsonify, request
 
 from .schemas import AlertItem
+from ..auth import require_permissions
 from ..services.controller_client import (
     ControllerClientError,
     get_controller_client,
@@ -75,6 +76,7 @@ def _demo_alerts() -> List[AlertItem]:
 
 
 @bp.get("/alerts")
+@require_permissions("alert:read")
 def get_alerts():
     """
     获取安全告警列表。

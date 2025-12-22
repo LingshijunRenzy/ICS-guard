@@ -9,6 +9,7 @@ from typing import Any, Dict
 from flask import Blueprint, jsonify, request
 
 from .schemas import FlowInfo
+from ..auth import require_permissions
 from ..services.inference import get_inference_service
 
 bp = Blueprint("model", __name__, url_prefix="/api")
@@ -20,6 +21,7 @@ bp = Blueprint("model", __name__, url_prefix="/api")
 
 
 @bp.post("/detect/flow")
+@require_permissions("model:detect")
 def detect_flow():
     """
     流级检测接口。
@@ -73,6 +75,7 @@ def detect_flow():
 
 
 @bp.get("/model/meta")
+@require_permissions("model:read")
 def get_model_meta():
     """
     获取模型元信息。
@@ -108,6 +111,7 @@ def get_model_meta():
 
 
 @bp.post("/detect/batch")
+@require_permissions("model:detect")
 def detect_batch():
     """
     批量流级检测接口。

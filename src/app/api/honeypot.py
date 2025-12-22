@@ -10,6 +10,7 @@ from typing import Any, List, Optional
 from flask import Blueprint, jsonify, request
 
 from .schemas import HoneypotLogItem
+from ..auth import require_permissions
 from ..services.controller_client import (
     ControllerClientError,
     get_controller_client,
@@ -72,6 +73,7 @@ def _demo_honeypot_logs() -> List[HoneypotLogItem]:
 
 
 @bp.get("/logs")
+@require_permissions("honeypot:read")
 def get_honeypot_logs():
     """
     获取蜜罐日志。

@@ -14,6 +14,9 @@ websockets>=12.0
 requests>=2.32.0
 matplotlib>=3.7.0
 
+# 数据库
+sqlalchemy>=2.0.0
+
 # 测试依赖
 pytest>=8.0.0
 responses>=0.25.0

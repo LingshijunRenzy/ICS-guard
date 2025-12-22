@@ -1,6 +1,6 @@
 from flask import Flask, jsonify
 
-from . import alerts, honeypot, model, policies, topology
+from . import alerts, auth, honeypot, model, policies, roles, topology, users
 
 
 def register_routes(app: Flask) -> None:
@@ -56,8 +56,11 @@ def register_routes(app: Flask) -> None:
         return {"status": "ok"}
 
     # 业务 API 蓝图
+    app.register_blueprint(auth.bp)
     app.register_blueprint(topology.bp)
     app.register_blueprint(policies.bp)
     app.register_blueprint(alerts.bp)
     app.register_blueprint(honeypot.bp)
     app.register_blueprint(model.bp)
+    app.register_blueprint(users.bp)
+    app.register_blueprint(roles.bp)
