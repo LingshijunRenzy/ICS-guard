@@ -51,6 +51,7 @@ export interface TopologyLink {
   id: string
   source: string
   target: string
+  bandwidth?: number
   status?: string
 }
 
@@ -65,6 +66,32 @@ export interface PolicySummary {
   type: string
   status: string
   priority?: number
+  metadata?: Record<string, any>
+}
+
+export interface PolicyDetail {
+  id: string
+  name: string
+  description: string
+  type: string
+  subtype: string
+  status: string
+  priority: number
+  scope: {
+    target_type: string
+    target_identifier: string
+  }
+  conditions: Record<string, any>
+  actions: {
+    primary_action: string
+    secondary_actions?: Array<{
+      action_type: string
+      [key: string]: any
+    }>
+    [key: string]: any
+  }
+  monitoring?: Record<string, any>
+  metadata?: Record<string, any>
 }
 
 export interface AlertItem {
@@ -110,6 +137,12 @@ export interface AppRole {
   is_system: boolean
 }
 
+export interface UiEventItem {
+  type: string
+  timestamp: string
+  data: Record<string, any>
+}
+
 // ---- 封装的 API 函数（只做最小封装，不加多余逻辑） ----
 
 export async function fetchTopology() {
@@ -117,8 +150,65 @@ export async function fetchTopology() {
   return res.data
 }
 
-export async function fetchPolicies() {
-  const res = await apiClient.get<PolicySummary[]>('/policies')
+export async function fetchPolicies(params?: { type?: string; status?: string }) {
+  const res = await apiClient.get<{ policies: PolicySummary[] }>('/policies', { params })
+  return res.data.policies
+}
+
+export async function fetchPolicy(policyId: string) {
+  const res = await apiClient.get<{ policy: PolicyDetail }>(`/policies/${policyId}`)
+  return res.data.policy
+}
+
+export async function createPolicy(policy: Partial<PolicyDetail>) {
+  const res = await apiClient.post<{ status: string; message: string; policy_id: string }>('/policies', {
+    policy,
+  })
+  return res.data
+}
+
+export async function updatePolicy(policyId: string, policy: Partial<PolicyDetail>) {
+  const res = await apiClient.put<{ status: string; message: string; policy_id: string }>(
+    `/policies/${policyId}`,
+    { policy }
+  )
+  return res.data
+}
+
+export async function deletePolicy(policyId: string) {
+  const res = await apiClient.delete<{ status: string; message: string; policy_id: string }>(
+    `/policies/${policyId}`
+  )
+  return res.data
+}
+
+export async function applyPolicy(
+  policyId: string,
+  targets: {
+    target_nodes?: string[]
+    target_links?: string[]
+    target_flows?: string[]
+  }
+) {
+  const res = await apiClient.post<{ status: string; message: string; policy_id: string }>(
+    `/policies/${policyId}/apply`,
+    targets
+  )
+  return res.data
+}
+
+export async function revokePolicy(
+  policyId: string,
+  targets: {
+    target_nodes?: string[]
+    target_links?: string[]
+    target_flows?: string[]
+  }
+) {
+  const res = await apiClient.post<{ status: string; message: string; policy_id: string }>(
+    `/policies/${policyId}/revoke`,
+    targets
+  )
   return res.data
 }
 
@@ -174,6 +264,13 @@ export async function updateUser(userId: number, payload: Partial<{
 
 export async function deleteUser(userId: number) {
   const res = await apiClient.delete<{ status: string }>(`/users/${userId}`)
+  return res.data
+}
+
+export async function fetchUiEvents(params?: { limit?: number; types?: string }) {
+  const res = await apiClient.get<{ items: UiEventItem[] }>('/events', {
+    params,
+  })
   return res.data
 }
 

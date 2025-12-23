@@ -8,13 +8,14 @@
 """
 
 from functools import wraps
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple, Set
 
 from flask import current_app, jsonify, request, g
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+from sqlalchemy.orm import joinedload
 
 from .db import session_scope
-from .db.models import User
+from .db.models import User, Role, Permission
 
 
 # ---------------------------------------------------------------------------
@@ -87,12 +88,25 @@ def get_current_user(max_age: Optional[int] = 3600) -> Tuple[Optional[User], Opt
     user_id = data["sub"]
 
     with session_scope() as session:
-        user = session.get(User, user_id)
-        # 将 user 附着到 g 上，但注意 session 在退出后关闭，因此只用于权限判断
+        # 预加载 roles 和 permissions，避免会话关闭后再 lazy load 导致 DetachedInstanceError
+        user: Optional[User] = (
+            session.query(User)
+            .options(joinedload(User.roles).joinedload(Role.permissions))
+            .filter(User.id == user_id)
+            .first()
+        )
+
         if not user or not user.is_active:
             return None, "inactive_user"
 
+        # 计算权限集合并缓存到 g 上，避免后续再访问 ORM 关系
+        perms: Set[str] = set()
+        for role in user.roles:
+            for perm in role.permissions:
+                perms.add(perm.code)
+
         g.current_user = user
+        g.current_user_permissions = perms
         return user, None
 
 
@@ -131,7 +145,10 @@ def require_permissions(*required_permissions: str):
                 return jsonify({"error": "forbidden", "message": "Invalid or inactive user"}), 403
 
             # 权限检查：目前要求用户至少拥有其中一个权限
-            user_perms = user.get_all_permissions()
+            user_perms = getattr(g, "current_user_permissions", None)
+            if user_perms is None:
+                # 兼容性兜底：从用户对象重新计算
+                user_perms = user.get_all_permissions()
             if not any(p in user_perms for p in required_permissions):
                 return (
                     jsonify(

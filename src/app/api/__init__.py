@@ -1,6 +1,11 @@
 from flask import Flask, jsonify
 
-from . import alerts, auth, honeypot, model, policies, roles, topology, users
+from . import alerts, auth, events, honeypot, model, policies, roles, topology, users
+from ..services.controller_client import (
+    AuthenticationError,
+    ControllerClientError,
+    TokenExpiredError,
+)
 
 
 def register_routes(app: Flask) -> None:
@@ -53,7 +58,25 @@ def register_routes(app: Flask) -> None:
     @app.get("/healthz")
     def healthz():
         """健康检查接口。"""
-        return {"status": "ok"}
+        return jsonify({"status": "ok"})
+
+    # 注册错误处理器
+    @app.errorhandler(AuthenticationError)
+    @app.errorhandler(TokenExpiredError)
+    def handle_auth_error(e):
+        """处理认证错误。"""
+        return jsonify({
+            "error": "authentication_failed",
+            "message": str(e),
+        }), 401
+
+    @app.errorhandler(ControllerClientError)
+    def handle_controller_error(e):
+        """处理控制层客户端错误。"""
+        return jsonify({
+            "error": "controller_error",
+            "message": str(e),
+        }), 502  # Bad Gateway，表示无法连接到控制层或控制层返回错误
 
     # 业务 API 蓝图
     app.register_blueprint(auth.bp)
@@ -61,6 +84,7 @@ def register_routes(app: Flask) -> None:
     app.register_blueprint(policies.bp)
     app.register_blueprint(alerts.bp)
     app.register_blueprint(honeypot.bp)
+    app.register_blueprint(events.bp)
     app.register_blueprint(model.bp)
     app.register_blueprint(users.bp)
     app.register_blueprint(roles.bp)

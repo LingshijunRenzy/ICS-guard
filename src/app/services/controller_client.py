@@ -110,11 +110,26 @@ class ControllerClient:
         """
         cid = client_id or self._client_id
         csec = client_secret or self._client_secret
-        resp = requests.post(
-            f"{self.base_url}/auth/token",
-            json={"client_id": cid, "client_secret": csec},
-            timeout=self._timeout,
-        )
+        
+        if not cid or not csec:
+            raise AuthenticationError(
+                "Controller client credentials not configured. "
+                "Please set CONTROLLER_CLIENT_ID and CONTROLLER_CLIENT_SECRET."
+            )
+        
+        try:
+            resp = requests.post(
+                f"{self.base_url}/auth/token",
+                json={"client_id": cid, "client_secret": csec},
+                timeout=self._timeout,
+            )
+        except requests.exceptions.ConnectionError as e:
+            raise ControllerClientError(f"Failed to connect to controller at {self.base_url}: {e}") from e
+        except requests.exceptions.Timeout as e:
+            raise ControllerClientError(f"Request to controller timed out: {e}") from e
+        except requests.exceptions.RequestException as e:
+            raise ControllerClientError(f"Request to controller failed: {e}") from e
+        
         self._raise_for_status(resp)
         data = self._extract_data(resp)
         token = TokenPair(
@@ -138,11 +153,20 @@ class ControllerClient:
                 if self._token is None:
                     raise AuthenticationError("No token available to refresh")
                 rt = self._token.refresh_token
-        resp = requests.get(
-            f"{self.base_url}/auth/refresh",
-            headers={"Authorization": f"Bearer {rt}"},
-            timeout=self._timeout,
-        )
+        
+        try:
+            resp = requests.get(
+                f"{self.base_url}/auth/refresh",
+                headers={"Authorization": f"Bearer {rt}"},
+                timeout=self._timeout,
+            )
+        except requests.exceptions.ConnectionError as e:
+            raise ControllerClientError(f"Failed to connect to controller at {self.base_url}: {e}") from e
+        except requests.exceptions.Timeout as e:
+            raise ControllerClientError(f"Request to controller timed out: {e}") from e
+        except requests.exceptions.RequestException as e:
+            raise ControllerClientError(f"Request to controller failed: {e}") from e
+        
         self._raise_for_status(resp)
         data = self._extract_data(resp)
         token = TokenPair(
@@ -229,20 +253,37 @@ class ControllerClient:
         url = f"{self.base_url}{path}"
         headers = kwargs.pop("headers", {})
         if auth:
-            headers["Authorization"] = f"Bearer {self.ensure_token()}"
+            try:
+                headers["Authorization"] = f"Bearer {self.ensure_token()}"
+            except Exception as e:
+                raise ControllerClientError(f"Failed to obtain access token: {e}") from e
+        
         kwargs["headers"] = headers
         kwargs.setdefault("timeout", self._timeout)
 
-        resp = requests.request(method, url, **kwargs)
+        try:
+            resp = requests.request(method, url, **kwargs)
+        except requests.exceptions.ConnectionError as e:
+            raise ControllerClientError(f"Failed to connect to controller at {self.base_url}: {e}") from e
+        except requests.exceptions.Timeout as e:
+            raise ControllerClientError(f"Request to controller timed out: {e}") from e
+        except requests.exceptions.RequestException as e:
+            raise ControllerClientError(f"Request to controller failed: {e}") from e
 
         # 401 重试逻辑
         if resp.status_code == 401 and auth and retry_on_401:
             try:
                 self.refresh_token()
             except Exception:
-                self.get_token()
-            headers["Authorization"] = f"Bearer {self.ensure_token()}"
-            resp = requests.request(method, url, **kwargs)
+                try:
+                    self.get_token()
+                except Exception as e:
+                    raise AuthenticationError(f"Failed to authenticate with controller: {e}") from e
+            try:
+                headers["Authorization"] = f"Bearer {self.ensure_token()}"
+                resp = requests.request(method, url, **kwargs)
+            except requests.exceptions.RequestException as e:
+                raise ControllerClientError(f"Request to controller failed after retry: {e}") from e
 
         self._raise_for_status(resp)
         return self._extract_data(resp)

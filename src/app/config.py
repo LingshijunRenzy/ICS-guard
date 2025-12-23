@@ -22,9 +22,14 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "JSON_AS_ASCII": False,
     # 控制层连接
     "CONTROLLER_BASE_URL": "http://localhost:8000",
-    "CONTROLLER_CLIENT_ID": "",
-    "CONTROLLER_CLIENT_SECRET": "",
+    "CONTROLLER_CLIENT_ID": "app-layer-client",  # 默认客户端 ID（开发环境）
+    "CONTROLLER_CLIENT_SECRET": "app-layer-secret",  # 默认客户端密钥（开发环境）
     "CONTROLLER_WS_BASE_URL": "ws://localhost:8000",
+    # 是否启用控制层 WebSocket 订阅（默认开启，可通过环境变量关闭）
+    "ENABLE_CONTROLLER_WS": True,
+    # UI WebSocket 服务端配置（用于 /ws/ui-events）
+    "UI_WS_HOST": "0.0.0.0",
+    "UI_WS_PORT": 8766,
     # 模型与推理（默认指向最新一次训练输出，可通过环境变量覆盖）
     "MODEL_DIR": "models",
     "MODEL_FILE": "251222_174624_lightgbm_model.pkl",
@@ -49,6 +54,9 @@ ENV_MAPPING: Dict[str, str] = {
     "ICS_GUARD_CONTROLLER_CLIENT_ID": "CONTROLLER_CLIENT_ID",
     "ICS_GUARD_CONTROLLER_CLIENT_SECRET": "CONTROLLER_CLIENT_SECRET",
     "ICS_GUARD_CONTROLLER_WS_URL": "CONTROLLER_WS_BASE_URL",
+    "ICS_GUARD_ENABLE_CONTROLLER_WS": "ENABLE_CONTROLLER_WS",
+    "ICS_GUARD_UI_WS_HOST": "UI_WS_HOST",
+    "ICS_GUARD_UI_WS_PORT": "UI_WS_PORT",
     "ICS_GUARD_MODEL_DIR": "MODEL_DIR",
     "ICS_GUARD_MODEL_FILE": "MODEL_FILE",
     "ICS_GUARD_FEATURES_FILE": "FEATURES_FILE",

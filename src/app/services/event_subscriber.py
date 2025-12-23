@@ -53,6 +53,63 @@ class Event:
 
 
 # ---------------------------------------------------------------------------
+# 面向 UI 的最近事件缓存（内存环形缓冲区）
+# ---------------------------------------------------------------------------
+
+_ui_events_lock = threading.Lock()
+_ui_events: List[Event] = []
+_ui_events_max_len = 200
+
+
+def record_event_for_ui(event: Event) -> None:
+    """
+    记录事件到内存缓存，供前端查询最近事件使用。
+
+    简单环形缓冲：只保留最近 _ui_events_max_len 条。
+    """
+    with _ui_events_lock:
+        _ui_events.append(event)
+        if len(_ui_events) > _ui_events_max_len:
+            # 仅做简单裁剪，避免无限增长
+            del _ui_events[0 : len(_ui_events) - _ui_events_max_len]
+
+    # 异步推送给 UI WebSocket 客户端（如果已启动）
+    try:
+        from .ui_events_ws import enqueue_ui_event
+
+        enqueue_ui_event(
+            {
+                "type": event.event_type.value,
+                "timestamp": event.timestamp,
+                "data": event.data,
+            }
+        )
+    except Exception:
+        # 不影响主流程
+        pass
+
+
+def get_recent_events(limit: int = 100, event_types: Optional[Set[EventType]] = None) -> List[Dict[str, Any]]:
+    """
+    获取最近的事件列表，按时间顺序返回，转换为可 JSON 序列化的 dict。
+    """
+    with _ui_events_lock:
+        events = list(_ui_events[-limit:])
+
+    if event_types is not None:
+        events = [e for e in events if e.event_type in event_types]
+
+    return [
+        {
+            "type": e.event_type.value,
+            "timestamp": e.timestamp,
+            "data": e.data,
+        }
+        for e in events
+    ]
+
+
+# ---------------------------------------------------------------------------
 # 事件处理器类型
 # ---------------------------------------------------------------------------
 
@@ -120,7 +177,11 @@ class EndpointSubscriber:
 
         while self._running:
             try:
-                async with websockets.connect(self.url) as ws:
+                async with websockets.connect(
+                    self.url,
+                    ping_interval=20,
+                    ping_timeout=20,
+                ) as ws:
                     self._ws = ws
                     self._retry_count = 0
                     logger.info("Connected to %s", self.url)

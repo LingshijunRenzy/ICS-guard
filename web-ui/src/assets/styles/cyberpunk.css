@@ -1,0 +1,193 @@
+/* 赛博朋克·战术全息风格主题 */
+
+:root {
+  /* 核心色板 */
+  --cyber-bg: #050505;
+  /* 更深邃的黑 */
+  --cyber-primary: #FFFFFF;
+  /* 改为纯白作为主色 */
+  --cyber-secondary: #2DFEFF;
+  /* 青色保留用于高亮 */
+  --cyber-accent: #E020F0;
+  /* 紫色保留用于特殊状态 */
+  --cyber-text-main: #FFFFFF;
+  --cyber-text-sub: #AAAAAA;
+  --cyber-mask: rgba(0, 0, 0, 0.85);
+
+  /* 辅助色 */
+  --cyber-success: #00FF9C;
+  --cyber-warning: #FFE600;
+  --cyber-danger: #FF2A6D;
+
+  /* 边框与发光 */
+  --cyber-border-primary: 1px solid #FFFFFF;
+  /* 纯白实线边框 */
+  --cyber-border-accent: 1px solid var(--cyber-accent);
+  --cyber-glow-white: 0 0 4px rgba(255, 255, 255, 0.5);
+  /* 白色微发光 */
+
+  /* 字体 - 使用 0xProto Nerd Font */
+  --cyber-font-title: '0xProto Nerd Font', monospace;
+  --cyber-font-body: '0xProto Nerd Font', monospace;
+}
+
+/* ---- 全局基础重置 ---- */
+body {
+  background-color: var(--cyber-bg);
+  color: var(--cyber-text-main);
+  font-family: var(--cyber-font-body);
+  /* 背景纹理：极淡的扫描线 */
+  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 100% 4px;
+  overflow-x: hidden;
+}
+
+/* 覆盖 Element Plus 变量 */
+:root {
+  --el-color-primary: var(--cyber-secondary);
+  /* 交互组件保留青色高亮 */
+  --el-color-success: var(--cyber-success);
+  --el-color-warning: var(--cyber-warning);
+  --el-color-danger: var(--cyber-danger);
+  --el-bg-color: var(--cyber-bg);
+  --el-bg-color-overlay: #000000;
+  --el-text-color-primary: var(--cyber-text-main);
+  --el-text-color-regular: var(--cyber-text-sub);
+  --el-border-color: #FFFFFF;
+  /* 全局白色边框 */
+  --el-border-color-light: rgba(255, 255, 255, 0.3);
+  --el-fill-color-blank: transparent;
+}
+
+/* ---- 组件样式覆盖 ---- */
+
+/* 卡片 - 纯白细边框，无圆角 */
+.el-card {
+  background-color: rgba(0, 0, 0, 0.6) !important;
+  border: 1px solid #FFFFFF !important;
+  border-radius: 0 !important;
+  /* 去除圆角 */
+  color: var(--cyber-text-main) !important;
+  backdrop-filter: blur(2px);
+  position: relative;
+  overflow: visible !important;
+}
+
+/* 卡片装饰角标 - 改为实心白块 */
+.el-card::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 6px;
+  height: 6px;
+  background: #FFFFFF;
+  z-index: 1;
+  border: none;
+}
+
+.el-card::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 6px;
+  height: 6px;
+  background: #FFFFFF;
+  z-index: 1;
+  border: none;
+}
+
+.el-card__header {
+  border-bottom: 1px solid #FFFFFF !important;
+  font-family: var(--cyber-font-title);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* 表格 */
+.el-table {
+  --el-table-bg-color: transparent !important;
+  --el-table-tr-bg-color: transparent !important;
+  --el-table-header-bg-color: rgba(255, 255, 255, 0.1) !important;
+  --el-table-border-color: rgba(255, 255, 255, 0.3) !important;
+  --el-table-text-color: var(--cyber-text-sub) !important;
+  --el-table-header-text-color: #FFFFFF !important;
+  font-family: var(--cyber-font-body);
+}
+
+/* 按钮 - 白色边框 */
+.el-button {
+  background: rgba(0, 0, 0, 0.8) !important;
+  border: 1px solid #FFFFFF !important;
+  border-radius: 0 !important;
+  color: #FFFFFF !important;
+  font-family: var(--cyber-font-title);
+  text-transform: uppercase;
+  transition: all 0.1s ease;
+}
+
+.el-button:hover,
+.el-button:focus {
+  background: #FFFFFF !important;
+  color: #000000 !important;
+  /* hover时反转颜色 */
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+  transform: none;
+}
+
+/* 菜单 */
+.el-menu {
+  background-color: transparent !important;
+  border-right: none !important;
+}
+
+.el-menu-item {
+  color: var(--cyber-text-sub) !important;
+  font-family: var(--cyber-font-body);
+  border-left: 2px solid transparent;
+}
+
+.el-menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #FFFFFF !important;
+}
+
+.el-menu-item.is-active {
+  color: #FFFFFF !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-left: 2px solid #FFFFFF;
+  /* 白色激活条 */
+}
+
+/* 输入框 */
+.el-input__wrapper {
+  background-color: rgba(0, 0, 0, 0.8) !important;
+  box-shadow: 0 0 0 1px #FFFFFF inset !important;
+  border-radius: 0 !important;
+}
+
+.el-input__inner {
+  color: #FFFFFF !important;
+  font-family: var(--cyber-font-body);
+}
+
+/* ---- 动画效果 ---- */
+@keyframes cyber-blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.cyber-blink {
+  animation: cyber-blink 2s steps(1) infinite;
+  /* steps(1) 产生硬切换效果 */
+}

@@ -24,50 +24,10 @@ bp = Blueprint("alerts", __name__, url_prefix="/api")
 # ---------------------------------------------------------------------------
 
 
-def _demo_timestamp() -> str:
-    """生成当前 UTC 时间戳。"""
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _try_controller_call(func, *args, **kwargs) -> Any:
-    """尝试调用控制层，失败时返回 None。"""
-    try:
-        client = get_controller_client()
-        return func(client, *args, **kwargs)
-    except ControllerClientError:
-        return None
-    except Exception:
-        return None
-
-
-def _demo_alerts() -> List[AlertItem]:
-    """演示用告警数据。"""
-    return [
-        {
-            "id": "alert-001",
-            "timestamp": "2025-01-01T12:00:00Z",
-            "type": "traffic_anomaly",
-            "severity": "high",
-            "source_ip": "10.0.0.99",
-            "description": "High entropy Modbus traffic detected",
-        },
-        {
-            "id": "alert-002",
-            "timestamp": "2025-01-01T12:05:00Z",
-            "type": "honeypot_interaction",
-            "severity": "medium",
-            "source_ip": "10.0.0.88",
-            "description": "Suspicious write attempt to honeypot",
-        },
-        {
-            "id": "alert-003",
-            "timestamp": "2025-01-01T12:10:00Z",
-            "type": "connection_anomaly",
-            "severity": "low",
-            "source_ip": "10.0.0.77",
-            "description": "Unusual connection pattern detected",
-        },
-    ]
+def _call_controller(func, *args, **kwargs) -> Any:
+    """调用控制层 API，失败时抛出异常。"""
+    client = get_controller_client()
+    return func(client, *args, **kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -106,13 +66,5 @@ def get_alerts():
     end_time: Optional[str] = request.args.get("end_time")
     severity: Optional[str] = request.args.get("severity")
 
-    result = _try_controller_call(lambda c: c.get_alerts(start_time, end_time, severity))
-    if result is not None:
-        return jsonify({"alerts": result})
-
-    # 降级到演示数据
-    alerts = _demo_alerts()
-    # 应用过滤
-    if severity:
-        alerts = [a for a in alerts if a.get("severity") == severity]
-    return jsonify({"alerts": alerts})
+    result = _call_controller(lambda c: c.get_alerts(start_time, end_time, severity))
+    return jsonify({"alerts": result})

@@ -41,6 +41,7 @@ def create_app(static_folder: Optional[str] = None) -> Flask:
     # 初始化推理服务
     with app.app_context():
         _init_inference_service(app)
+        _init_event_subscriber(app)
 
     # 注册前端 SPA 路由
     _register_spa_routes(app)
@@ -66,6 +67,47 @@ def _init_inference_service(app: Flask) -> None:
             logger.warning("Inference service initialized without model (demo mode)")
     except Exception as e:
         logger.warning("Failed to initialize inference service: %s", e)
+
+
+def _init_event_subscriber(app: Flask) -> None:
+    """
+    初始化控制层 WebSocket 事件订阅。
+
+    受配置项 ENABLE_CONTROLLER_WS 控制，默认关闭，避免在测试环境或无控制层时产生多余连接。
+    """
+    enabled = bool(app.config.get("ENABLE_CONTROLLER_WS"))
+    if not enabled:
+        return
+
+    try:
+        from .services import EventType, get_event_subscriber
+        from .services.event_subscriber import record_event_for_ui
+        from .services.ui_events_ws import start_ui_ws_server
+
+        manager = get_event_subscriber(app.config.get("CONTROLLER_WS_BASE_URL"))
+
+        # 默认注册一个简单的日志 handler，确保订阅链路完整可用；
+        # 同时将事件缓存到内存中，供前端轮询查询。
+        def _log_event(event) -> None:
+            logger.debug(
+                "WS event received: type=%s ts=%s", getattr(event, "event_type", None), getattr(event, "timestamp", None)
+            )
+
+        for et in EventType:
+            manager.register_handler(et, _log_event)
+            manager.register_handler(et, record_event_for_ui)
+
+        # 启动面向 UI 的 WebSocket 服务端
+        ui_host = app.config.get("UI_WS_HOST", "0.0.0.0")
+        ui_port = int(app.config.get("UI_WS_PORT", 8766))
+        start_ui_ws_server(host=ui_host, port=ui_port)
+
+        # 订阅所有事件类型并在后台线程启动
+        manager.start()
+        logger.info("Controller WebSocket event subscriber started (base=%s)", app.config.get("CONTROLLER_WS_BASE_URL"))
+    except Exception as e:
+        # 避免影响应用启动，只记录警告
+        logger.warning("Failed to initialize controller WebSocket subscriber: %s", e)
 
 
 def _register_spa_routes(app: Flask) -> None:
