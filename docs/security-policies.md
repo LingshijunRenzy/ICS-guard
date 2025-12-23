@@ -18,6 +18,10 @@
 - `subtype`: 策略子类型 (字符串, 示例: "access_control")
 - `status`: 策略状态 (枚举: active/inactive, 示例: "active")
 - `priority`: 策略优先级 (整数, 数值越小优先级越高, 示例: 100)
+- `conditions`: 条件定义 (对象)
+- `actions`: 动作定义 (对象)
+  - `primary_action`: 主要动作（对象）
+  - `secondary_actions`: 次要动作 (数组, 示例: [ { "action_type": "log", "log_level": "info", "log_message": "访问PLC-01" } ])
 
 ### 条件定义 (Conditions)
 条件部分定义了策略触发所需满足的条件。不同类型的策略支持不同的条件字段：
@@ -46,53 +50,111 @@
 ### 动作定义 (Actions)
 动作部分定义了当条件满足时要执行的操作。每个策略可以定义一个主要动作和多个次要动作。
 
-#### 主要动作类型 (字符串)
-- `allow`: 允许操作
-- `block`: 阻止操作
-- `throttle`: 限流操作
-- `disable`: 禁用操作
-- `shutdown`: 关闭操作
-- `terminate`: 终止操作
-- `redirect`: 重定向操作
-- `alert`: 告警操作
+#### 主要动作
+主要动作是一个对象，包含以下字段：
+- `action_type`: 动作类型 (字符串, 示例: "allow")
+- `action_params`: 动作参数 (对象)
 
-示例: "allow"
+#### 主要动作类型（action_type）
+- `allow`: 允许通过，不做阻断或降级处理。
+- `block`: 立即拦截当前及后续流量/请求，不再转发；直接丢弃（不回复、不转发）。
+- `throttle`: 限流/降速，按带宽或速率阈值进行限制。
+- `disable`: 禁用目标对象（设备/连接/策略），未来新流量不允许建立；是配置层停用，需重新启用才恢复。
+- `shutdown`（连接软切断）: 在有通知的前提下切断连接，先通知/收尾，再断开连接。
+- `terminate`（连接硬切断）: 强制切断连接，立即断开不做收尾，用于应急。
+- `redirect`: 将流量引导到新的目标（如蜜罐/隔离区），目标使用 IP+port；支持多目标数组时视为镜像到所有目标。
+- `alert`: 生成告警，并添加到告警记录中
 
-#### 次要动作类型
+##### 主要动作参数要求
+- `allow`: 无额外参数。
+- `block`: 无额外参数。
+- `throttle`: 
+  - `rate_limit`: 需要对象，字段：
+    - `bandwidth_mbps` (必填，>0，数值，Mbps，上限带宽)
+    - `packets_per_second` (可选，>0，整数，包速率上限)
+    - `direction` (可选，`ingress|egress|both`，默认 `both`)
+    - `burst_packets` (可选，整数，突发包数上限，默认 0 表示不允许突发)
+    - `burst_bytes` (可选，整数，突发字节上限，默认 0 表示不允许突发)
+    - `strategy` (可选，`drop|queue`，超限行为，默认 `drop`)
+    - `smoothing` (可选，`token_bucket|leaky_bucket`，默认 `token_bucket`)
+- `disable`: 
+  - `reason`: （字符串，可选）。
+- `shutdown`: 
+  - `notice`（字符串， 可选）。
+- `terminate`: 无额外参数。
+- `redirect`: 
+  - `targets`: 支持单个或数组，形如 `{ "targets": [ { "ip": "10.0.0.99", "port": 502 } ] }`；多目标表示镜像到所有目标。
+- `alert`: 
+  - `alert_level`: 告警级别 (枚举: info/warning/high/critical, 示例: "high")
+
+#### 次要动作
+次要动作是一个对象，包含以下字段：
+- `action_type`: 动作类型 (字符串, 示例: "log")
+- `action_params`: 动作参数 (对象)
+
+#### 次要动作类型（action_type）
 次要动作通常用于补充主要动作，提供额外的功能：
 
 - `log`: 日志记录 (对象)
+- `alert`: 发送告警 (对象)
+- `block`: 阻止特定协议或IP (对象)
+- `redirect`: 重定向流量 (对象)
+- `rate_limit`: 速率限制 (对象)
+
+#### 次要动作参数要求
+- `log`:
   - `log_level`: 日志级别 (枚举: info/warning/alert/error, 示例: "info")
   - `log_message`: 自定义日志消息 (字符串, 示例: "访问PLC-01")
 
-- `alert`: 发送告警 (对象)
+- `alert`:
   - `alert_level`: 告警级别 (枚举: info/warning/high/critical, 示例: "high")
-  - `notification_channels`: 通知渠道 (字符串数组, 示例: ["email", "syslog"])
 
-- `block`: 阻止特定协议或IP (对象)
+- `block`:
   - `blocked_protocols`: 被阻止的协议列表 (字符串数组, 示例: ["all_other"])
 
-- `redirect`: 重定向流量 (对象)
+- `redirect`:
   - `redirect_target`: 重定向目标 (字符串, 如蜜罐标识符, 示例: "honeypot-01")
 
-- `rate_limit`: 速率限制 (对象)
+- `rate_limit`:
   - `bandwidth_mbps`: 带宽限制 (整数, Mbps, 示例: 10)
+
+
+### 主要动作与次要动作的可选组合（互斥/允许）
+- 当 `primary_action = allow`：可选次要动作 `log`、`alert`。不应叠加 `block`/`redirect`/`rate_limit`（语义冲突）。
+- 当 `primary_action = block`：可选次要动作 `log`、`alert`。不要再叠加 `redirect` 或额外 `block`。
+- 当 `primary_action = throttle`：必须有 `rate_limit`；可选 `log`、`alert`；不叠加 `block`/`redirect`。
+- 当 `primary_action = disable` / `shutdown` / `terminate`：可选 `log`、`alert`；不叠加 `redirect`、`rate_limit`、`block`。
+- 当 `primary_action = redirect`：可选 `redirect`（用于指定目标）、`log`、`alert`；不叠加 `block`/`rate_limit`。
+- 当 `primary_action = alert`：可选 `log`；避免再叠加 `block`/`redirect`/`rate_limit`（保持告警语义单一）。
 
 ### 条件与动作的关系
 条件和动作之间的关系决定了策略的行为逻辑：
 
 1. **条件评估**: 系统持续监控策略作用域内的对象，当对象的状态满足策略定义的所有条件时，触发动作执行。
 
-2. **动作执行**: 当条件被满足时，系统首先执行主要动作，然后按顺序执行所有次要动作。
+2. **动作执行**: 当条件被满足时，系统首先执行主要动作，然后按顺序执行所有次要动作；若主要动作或次要动作执行失败，不再做额外处理。
 
 3. **条件组合**: 多个条件之间是AND关系，即必须同时满足所有条件才会触发动作。
 
-4. **优先级处理**: 当多个策略同时匹配同一对象时，系统按照优先级顺序执行，优先级高的策略先执行。
+4. **优先级处理**: 当多个策略同时匹配同一对象时，先按 `priority`（数值越小优先级越高）排序；若 `priority` 相同，则按创建时间，创建时间更新（更新近）者优先执行。
 
 ### 作用域定义 (Scope)
-作用域定义了策略的应用范围：
-- `target_type`: 目标类型 (枚举: device/connection/protocol/ip_range, 示例: "device")
-- `target_identifier`: 目标标识符 (字符串, 具体设备名、连接标识、协议名或IP段, 示例: "PLC-01")
+作用域定义了策略的应用范围，**必须与策略 `type` 对齐**：
+
+- 当 `type = node`：
+  - `target_type` 只能取：`device`
+  - `target_identifier`: 设备标识（节点 ID/名称），如 `"PLC-01"`
+
+- 当 `type = connection`：
+  - `target_type` 只能取：`connection`
+  - `target_identifier`: 连接标识（如链路 ID），如 `"conn-plc-hmi"`
+
+- 当 `type = flow`：
+  - `target_type` 可取：`protocol` | `ip_range` | `device`
+    - `protocol`: 协议名，如 `"modbus"`、`"http"`
+    - `ip_range`: CIDR，如 `"192.168.1.0/24"`
+    - `device`: 作为端点的设备标识，如 `"PLC-01"`（表示以该设备为源或目的的流）
+  - `target_identifier`: 与所选 `target_type` 对应的具体值
 
 ## 节点级策略
 
@@ -122,12 +184,16 @@
       "denied_ips": ["192.168.1.30"]
     },
     "actions": {
-      "primary_action": "allow",
+      "primary_action": {
+        "action_type": "allow"
+      },
       "secondary_actions": [
         {
           "action_type": "log",
-          "log_level": "info",
-          "log_message": "访问PLC-01"
+          "action_params": {
+            "log_level": "info",
+            "log_message": "访问PLC-01"
+          }
         }
       ]
     }
@@ -161,12 +227,20 @@
       }
     },
     "actions": {
-      "primary_action": "alert",
+      "primary_action": {
+        "action_type": "alert",
+        "action_params": {
+          "alert_level": "high",
+          "notification_channels": ["email", "syslog"]
+        }
+      },
       "secondary_actions": [
         {
           "action_type": "log",
-          "log_level": "warning",
-          "log_message": "PLC-01资源使用率过高"
+          "action_params": {
+            "log_level": "warning",
+            "log_message": "PLC-01资源使用率过高"
+          }
         }
       ]
     }
@@ -197,17 +271,24 @@
       "anomaly_detected": true
     },
     "actions": {
-      "primary_action": "shutdown",
+      "primary_action": {
+        "action_type": "shutdown",
+        "action_params": {}
+      },
       "secondary_actions": [
         {
           "action_type": "log",
-          "log_level": "alert",
-          "log_message": "检测到异常，关闭PLC服务"
+          "action_params": {
+            "log_level": "alert",
+            "log_message": "检测到异常，关闭PLC服务"
+          }
         },
         {
           "action_type": "alert",
-          "alert_level": "critical",
-          "notification_channels": ["email", "syslog"]
+          "action_params": {
+            "alert_level": "critical",
+            "notification_channels": ["email", "syslog"]
+          }
         }
       ]
     }
@@ -245,15 +326,21 @@
       }
     },
     "actions": {
-      "primary_action": "throttle",
-      "rate_limit": {
-        "bandwidth_mbps": 10
+      "primary_action": {
+        "action_type": "throttle",
+        "action_params": {
+          "rate_limit": {
+            "bandwidth_mbps": 10
+          }
+        }
       },
       "secondary_actions": [
         {
           "action_type": "log",
-          "log_level": "info",
-          "log_message": "限制PLC-HMI连接带宽至10Mbps"
+          "action_params": {
+            "log_level": "info",
+            "log_message": "限制PLC-HMI连接带宽至10Mbps"
+          }
         }
       ]
     }
@@ -284,12 +371,17 @@
       "anomaly_detected": true
     },
     "actions": {
-      "primary_action": "disable",
+      "primary_action": {
+        "action_type": "disable",
+        "action_params": {}
+      },
       "secondary_actions": [
         {
           "action_type": "log",
-          "log_level": "alert",
-          "log_message": "检测到异常，禁用PLC-HMI连接"
+          "action_params": {
+            "log_level": "alert",
+            "log_message": "检测到异常，禁用PLC-HMI连接"
+          }
         }
       ]
     }
@@ -320,16 +412,23 @@
       "allowed_protocols": ["modbus"]
     },
     "actions": {
-      "primary_action": "allow",
+      "primary_action": {
+        "action_type": "allow",
+        "action_params": {}
+      },
       "secondary_actions": [
         {
           "action_type": "block",
-          "blocked_protocols": ["all_other"]
+          "action_params": {
+            "blocked_protocols": ["all_other"]
+          }
         },
         {
           "action_type": "log",
-          "log_level": "info",
-          "log_message": "只允许Modbus协议通过"
+          "action_params": {
+            "log_level": "info",
+            "log_message": "只允许Modbus协议通过"
+          }
         }
       ]
     }
@@ -366,17 +465,24 @@
       }
     },
     "actions": {
-      "primary_action": "block",
+      "primary_action": {
+        "action_type": "block",
+        "action_params": {}
+      },
       "secondary_actions": [
         {
           "action_type": "log",
-          "log_level": "alert",
-          "log_message": "阻断高熵值Modbus流量"
+          "action_params": {
+            "log_level": "alert",
+            "log_message": "阻断高熵值Modbus流量"
+          }
         },
         {
           "action_type": "alert",
-          "alert_level": "high",
-          "notification_channels": ["syslog"]
+          "action_params": {
+            "alert_level": "high",
+            "notification_channels": ["syslog"]
+          }
         }
       ]
     }
@@ -407,16 +513,27 @@
       "suspicion_level": "high"
     },
     "actions": {
-      "primary_action": "redirect",
+      "primary_action": {
+        "action_type": "redirect",
+        "action_params": {
+          "targets": [
+            { "ip": "10.0.0.99", "port": 502 }
+          ]
+        }
+      },
       "secondary_actions": [
         {
           "action_type": "redirect",
-          "redirect_target": "honeypot-01"
+          "action_params": {
+            "redirect_target": "honeypot-01"
+          }
         },
         {
           "action_type": "log",
-          "log_level": "info",
-          "log_message": "重定向可疑流量至蜜罐"
+          "action_params": {
+            "log_level": "info",
+            "log_message": "重定向可疑流量至蜜罐"
+          }
         }
       ]
     }
@@ -449,12 +566,17 @@
       }
     },
     "actions": {
-      "primary_action": "terminate",
+      "primary_action": {
+        "action_type": "terminate",
+        "action_params": {}
+      },
       "secondary_actions": [
         {
           "action_type": "log",
-          "log_level": "info",
-          "log_message": "终止超时的Modbus会话"
+          "action_params": {
+            "log_level": "info",
+            "log_message": "终止超时的Modbus会话"
+          }
         }
       ]
     }

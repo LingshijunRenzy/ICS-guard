@@ -350,8 +350,18 @@
             "type": "object",
             "properties": {
               "primary_action": {
-                "type": "string",
-                "description": "主要动作 (allow, block, redirect, throttle, isolate, shutdown, disable, terminate)"
+                "type": "object",
+                "description": "主要动作，包含动作类型与参数",
+                "properties": {
+                  "action_type": {
+                    "type": "string",
+                    "description": "主要动作类型 (allow, block, throttle, disable, shutdown, terminate, redirect, alert)"
+                  },
+                  "action_params": {
+                    "type": "object",
+                    "description": "主要动作参数（可选，依 action_type 而定）"
+                  }
+                }
               },
               "secondary_actions": {
                 "type": "array",
@@ -360,59 +370,15 @@
                   "properties": {
                     "action_type": {
                       "type": "string",
-                      "description": "动作类型 (log, redirect, alert)"
+                      "description": "次要动作类型 (log, redirect, alert, block, rate_limit)"
                     },
-                    "log_level": {
-                      "type": "string",
-                      "description": "日志级别 (info, warning, alert, critical) (仅当action_type为log时)"
-                    },
-                    "log_message": {
-                      "type": "string",
-                      "description": "日志消息 (仅当action_type为log时)"
-                    },
-                    "redirect_target": {
-                      "type": "string",
-                      "description": "重定向目标 (仅当action_type为redirect时)"
-                    },
-                    "redirect_condition": {
-                      "type": "string",
-                      "description": "重定向条件 (仅当action_type为redirect时)"
-                    },
-                    "alert_level": {
-                      "type": "string",
-                      "description": "告警级别 (low, medium, high, critical) (仅当action_type为alert时)"
-                    },
-                    "notification_channels": {
-                      "type": "array",
-                      "items": {
-                        "type": "string"
-                      },
-                      "description": "通知渠道 (email, sms, syslog) (仅当action_type为alert时)"
+                    "action_params": {
+                      "type": "object",
+                      "description": "次要动作参数（可选，依 action_type 而定）"
                     }
                   }
                 },
                 "description": "次要动作列表"
-              },
-              "recovery_action": {
-                "type": "string",
-                "description": "恢复动作 (例如: auto_disable_after_5min)"
-              },
-              "rate_limit": {
-                "type": "object",
-                "properties": {
-                  "bandwidth_mbps": {
-                    "type": "number",
-                    "description": "带宽限制 (Mbps)"
-                  },
-                  "packets_per_second": {
-                    "type": "number",
-                    "description": "包速率限制 (包/秒)"
-                  },
-                  "burst_size": {
-                    "type": "number",
-                    "description": "突发大小"
-                  }
-                }
               }
             }
           },

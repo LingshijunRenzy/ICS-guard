@@ -70,6 +70,25 @@
 - `func_code_entropy`: number, 功能码熵
 - `reg_addr_std`: number, 目标寄存器地址标准差
 - `status`: string, 流状态 (active, inactive, completed)
+- `policy_effects` (可选): 数组，记录策略命中与动作结果
+  - `id`: string, 策略 ID
+  - `name`: string, 策略名称
+  - `action`: string, allow | block | redirect | throttle | isolate | inspect | log
+  - `priority`: number, 策略优先级
+  - `matched_at`: string, 触发时间 (ISO 8601)
+  - `result`: string, applied | skipped | error
+  - `reason`: string, 失败或跳过原因（可选）
+- `redirect_to` (可选): { `dst_ip`: string, `dst_port`: number, `node_id`: string (可选) }
+- `final_dst` (可选): { `dst_ip`: string, `dst_port`: number }，实际送达/尝试的终点
+- `blocked` (可选): boolean，是否被阻断
+- `blocked_at` (可选): string，阻断时间 (ISO 8601)
+- `block_reason` (可选): string，阻断原因
+- `path_hops` (可选): 数组，表示经过的节点路径（用于区分多跳/不同路径）
+  - `node_id`: string
+  - `ip`: string (可选)
+  - `type`: string (可选)
+  - `entered_at`: string (可选)，数据包首次进入该节点的时间（ISO 8601）
+  - `left_at`: string (可选)，数据包离开该节点的时间（ISO 8601）
 
 #### 策略 (Policy)
 系统中的策略定义，用于控制节点、连接和流的行为。
@@ -516,7 +535,19 @@ API使用标准HTTP状态码来指示请求的成功或失败。在出现错误�
       },
       "conditions": {},
       "actions": {
-        "primary_action": "string"
+        "primary_action": {
+          "action_type": "allow",
+          "action_params": {}
+        },
+        "secondary_actions": [
+          {
+            "action_type": "log",
+            "action_params": {
+              "log_level": "info",
+              "log_message": "示例日志"
+            }
+          }
+        ]
       },
       "metadata": {
         "created_by": "string"
@@ -551,16 +582,30 @@ API使用标准HTTP状态码来指示请求的成功或失败。在出现错误�
       "policy": {
         "id": "string",
         "name": "string",
-        "description": "string",
-        "type": "string",
-        "subtype": "string",
-        "status": "string",
-        "priority": "number",
-        "scope": {},
-        "conditions": {},
-        "actions": {},
-        "monitoring": {},
-        "metadata": {}
+      "description": "string",
+      "type": "string",
+      "subtype": "string",
+      "status": "string",
+      "priority": "number",
+      "scope": {
+        "target_type": "string",
+        "target_identifier": "string"
+      },
+      "conditions": {},
+      "actions": {
+        "primary_action": {
+          "action_type": "string",
+          "action_params": {}
+        },
+        "secondary_actions": [
+          {
+            "action_type": "string",
+            "action_params": {}
+          }
+        ]
+      },
+      "monitoring": {},
+      "metadata": {}
       }
     }
     ```
@@ -893,7 +938,34 @@ API使用标准HTTP状态码来指示请求的成功或失败。在出现错误�
         "byte_rate": "number",
         "func_code_entropy": "number",
         "reg_addr_std": "number",
-        "status": "string"
+        "status": "string",
+        "policy_effects": [
+          {
+            "id": "string",
+            "name": "string",
+            "action": "block",
+            "priority": 10,
+            "matched_at": "2025-12-23T08:51:46.267Z",
+            "result": "applied",
+            "reason": "matched rule#10"
+          }
+        ],
+        "blocked": true,
+        "blocked_at": "2025-12-23T08:51:46.300Z",
+        "block_reason": "policy block",
+        "redirect_to": {
+          "dst_ip": "10.0.0.99",
+          "dst_port": 502
+        },
+        "final_dst": {
+          "dst_ip": "10.0.0.99",
+          "dst_port": 502
+        },
+        "path_hops": [
+          {"node_id": "sw1", "ip": "10.0.0.1"},
+          {"node_id": "fw1", "ip": "10.0.0.254"},
+          {"node_id": "plc1", "ip": "10.0.0.10"}
+        ]
       }
     }
   }
