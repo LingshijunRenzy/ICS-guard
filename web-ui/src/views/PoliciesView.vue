@@ -40,7 +40,10 @@ const formData = ref<Partial<PolicyDetail>>({
   },
   conditions: {},
   actions: {
-    primary_action: 'allow',
+    primary_action: {
+      action_type: 'allow',
+      action_params: {}
+    },
     secondary_actions: [],
   },
 })
@@ -111,7 +114,10 @@ const openDrawer = async (mode: 'view' | 'edit' | 'create', policyId?: string) =
       },
       conditions: {},
       actions: {
-        primary_action: 'allow',
+        primary_action: {
+          action_type: 'allow',
+          action_params: {}
+        },
         secondary_actions: [],
       },
     }
@@ -225,15 +231,23 @@ const handleRevoke = async (policy: PolicySummary) => {
 // 添加次要动作
 const addSecondaryAction = () => {
   if (!formData.value.actions) {
-    formData.value.actions = { primary_action: 'allow', secondary_actions: [] }
+    formData.value.actions = {
+      primary_action: {
+        action_type: 'allow',
+        action_params: {}
+      },
+      secondary_actions: []
+    }
   }
   if (!formData.value.actions.secondary_actions) {
     formData.value.actions.secondary_actions = []
   }
   formData.value.actions.secondary_actions.push({
     action_type: 'log',
-    log_level: 'info',
-    log_message: '',
+    action_params: {
+      log_level: 'info',
+      log_message: '',
+    }
   })
 }
 
@@ -388,7 +402,7 @@ onMounted(() => {
           <div class="section-title">动作</div>
           <div class="detail-row">
             <span class="detail-label">主要动作:</span>
-            <span class="detail-value">{{ currentPolicy.actions.primary_action }}</span>
+            <span class="detail-value">{{ currentPolicy.actions.primary_action.action_type }}</span>
           </div>
           <div v-if="currentPolicy.actions.secondary_actions?.length" class="secondary-actions">
             <div class="detail-label">次要动作:</div>
@@ -676,7 +690,7 @@ onMounted(() => {
           <div class="form-section">
             <div class="section-title">动作配置</div>
             <el-form-item label="主要动作" required>
-              <el-select v-model="formData.actions!.primary_action" placeholder="选择动作" style="width: 100%">
+              <el-select v-model="formData.actions!.primary_action.action_type" placeholder="选择动作" style="width: 100%">
                 <el-option label="允许" value="allow" />
                 <el-option label="阻止" value="block" />
                 <el-option label="限流" value="throttle" />

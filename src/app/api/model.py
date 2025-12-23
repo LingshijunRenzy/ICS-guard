@@ -45,7 +45,14 @@ def detect_flow():
         "byte_rate": number,
         "func_code_entropy": number (可选),
         "reg_addr_std": number (可选),
-        "status": string (可选)
+        "status": string (可选),
+        "policy_effects": [ { "id": string, "name": string, "action": string, ... } ] (可选),
+        "redirect_to": { "dst_ip": string, "dst_port": number, "node_id": string } (可选),
+        "final_dst": { "dst_ip": string, "dst_port": number } (可选),
+        "blocked": boolean (可选),
+        "blocked_at": string (可选),
+        "block_reason": string (可选),
+        "path_hops": [ { "node_id": string, "ip": string, ... } ] (可选)
     }
 
     响应结构：

@@ -83,12 +83,14 @@ export interface PolicyDetail {
   }
   conditions: Record<string, any>
   actions: {
-    primary_action: string
-    secondary_actions?: Array<{
+    primary_action: {
       action_type: string
-      [key: string]: any
+      action_params: Record<string, any>
+    }
+    secondary_actions: Array<{
+      action_type: string
+      action_params: Record<string, any>
     }>
-    [key: string]: any
   }
   monitoring?: Record<string, any>
   metadata?: Record<string, any>

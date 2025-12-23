@@ -96,6 +96,23 @@ def handle_flow_event(event: Event) -> None:
     func_code_entropy = flow.get("func_code_entropy")
     reg_addr_std = flow.get("reg_addr_std")
 
+    import json
+
+    # 新增字段（根据新版API文档）
+    policy_effects = flow.get("policy_effects")
+    redirect_to = flow.get("redirect_to")
+    final_dst = flow.get("final_dst")
+    blocked = flow.get("blocked")
+    blocked_at = _parse_iso8601(flow.get("blocked_at"))
+    block_reason = flow.get("block_reason")
+    path_hops = flow.get("path_hops")
+
+    # 序列化复杂对象为JSON字符串（适用于数据库存储）
+    policy_effects_json = json.dumps(policy_effects) if policy_effects is not None else None
+    redirect_to_json = json.dumps(redirect_to) if redirect_to is not None else None
+    final_dst_json = json.dumps(final_dst) if final_dst is not None else None
+    path_hops_json = json.dumps(path_hops) if path_hops is not None else None
+
     # 将 Flow 写入 app_flows（若已存在则跳过插入，只更新基础字段）
     try:
         with session_scope() as session:
@@ -117,6 +134,14 @@ def handle_flow_event(event: Event) -> None:
                     byte_rate=byte_rate,
                     func_code_entropy=func_code_entropy,
                     reg_addr_std=reg_addr_std,
+                    # 新增字段（JSON序列化）
+                    policy_effects=policy_effects_json,
+                    redirect_to=redirect_to_json,
+                    final_dst=final_dst_json,
+                    blocked=blocked,
+                    blocked_at=blocked_at,
+                    block_reason=block_reason,
+                    path_hops=path_hops_json,
                     detect_status="pending",
                     decision_level="normal",
                     prob=0.0,
@@ -140,6 +165,14 @@ def handle_flow_event(event: Event) -> None:
                 existing.byte_rate = byte_rate
                 existing.func_code_entropy = func_code_entropy
                 existing.reg_addr_std = reg_addr_std
+                # 更新新增字段（JSON序列化）
+                existing.policy_effects = policy_effects_json
+                existing.redirect_to = redirect_to_json
+                existing.final_dst = final_dst_json
+                existing.blocked = blocked
+                existing.blocked_at = blocked_at
+                existing.block_reason = block_reason
+                existing.path_hops = path_hops_json
     except Exception as e:
         logger.error("Failed to persist flow to app_flows: %s", e, exc_info=True)
         # 即便写库失败，也不要影响后续 UI 显示或收流

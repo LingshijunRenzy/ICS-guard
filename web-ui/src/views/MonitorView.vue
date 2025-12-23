@@ -17,6 +17,35 @@ interface UiFlow {
   prob?: number
   decision_level?: string
   timestamp: string
+  // 新增字段（根据新版API文档）
+  policy_effects?: Array<{
+    id: string
+    name: string
+    action: string
+    priority: number
+    matched_at: string
+    result: string
+    reason?: string
+  }>
+  redirect_to?: {
+    dst_ip: string
+    dst_port: number
+    node_id?: string
+  }
+  final_dst?: {
+    dst_ip: string
+    dst_port: number
+  }
+  blocked?: boolean
+  blocked_at?: string
+  block_reason?: string
+  path_hops?: Array<{
+    node_id: string
+    ip?: string
+    type?: string
+    entered_at?: string
+    left_at?: string
+  }>
 }
 
 const flows = reactive<Record<string, UiFlow>>({})
@@ -28,6 +57,12 @@ function statusClass(status?: string) {
   if (s === 'suspicious') return 'cli-tag-suspicious'
   if (s === 'safe') return 'cli-tag-safe'
   return 'cli-tag-info'
+}
+
+// 格式化显示策略效果
+function formatPolicyEffects(effects?: Array<any>): string {
+  if (!effects || effects.length === 0) return '-'
+  return effects.map(e => `${e.name}(${e.action})`).join(', ')
 }
 let ws: WebSocket | null = null
 
@@ -88,6 +123,14 @@ function connect() {
           dst_port: flow.dst_port as number | undefined,
           protocol: flow.protocol as string | undefined,
           detect_status: (flow.detect_status as string | undefined) ?? existing.detect_status ?? 'pending',
+          // 新增字段
+          policy_effects: (flow.policy_effects as any) ?? existing.policy_effects,
+          redirect_to: (flow.redirect_to as any) ?? existing.redirect_to,
+          final_dst: (flow.final_dst as any) ?? existing.final_dst,
+          blocked: (flow.blocked as boolean | undefined) ?? existing.blocked,
+          blocked_at: (flow.blocked_at as string | undefined) ?? existing.blocked_at,
+          block_reason: (flow.block_reason as string | undefined) ?? existing.block_reason,
+          path_hops: (flow.path_hops as any) ?? existing.path_hops,
           timestamp: data.timestamp,
         }
       } else if (data.type === 'flow_detection_update') {
@@ -182,6 +225,16 @@ onBeforeUnmount(() => {
           </template>
         </el-table-column>
         <el-table-column prop="decision_level" label="决策等级" width="140" />
+        <!-- 新增字段列 -->
+        <el-table-column label="阻断状态" width="100">
+          <template #default="{ row }">
+            <span v-if="row.blocked !== undefined" :class="['cli-tag', row.blocked ? 'cli-tag-dangerous' : 'cli-tag-safe']">
+              {{ row.blocked ? '已阻断' : '未阻断' }}
+            </span>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="block_reason" label="阻断原因" width="150" />
       </el-table>
     </el-card>
 

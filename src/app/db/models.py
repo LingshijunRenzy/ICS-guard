@@ -359,6 +359,15 @@ class AppFlow(Base):
     func_code_entropy: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     reg_addr_std: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
+    # 新增字段（根据新版API文档）
+    policy_effects: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # 存储JSON字符串
+    redirect_to: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # 存储JSON字符串
+    final_dst: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # 存储JSON字符串
+    blocked: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    blocked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    block_reason: Mapped[Optional[str]] = mapped_column(String(256), nullable=True)
+    path_hops: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # 存储JSON字符串
+
     # 检测状态字段
     detect_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
     decision_level: Mapped[str] = mapped_column(String(16), nullable=False, default="normal")
