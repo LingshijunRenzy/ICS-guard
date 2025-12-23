@@ -66,7 +66,7 @@ def get_current_user(max_age: Optional[int] = 3600) -> Tuple[Optional[User], Opt
     从 Authorization 头中解析当前用户。
 
     返回 (user, error)，其中：
-        - user: 成功解析到的 User 实例或 None
+        - user: 成功解析到的 User 实例或 None（注意：会话结束后该实例处于 detached 状态，只能用于身份标识，不应用于访问数据库字段）
         - error: 出错时的错误代码字符串（"missing_token"/"invalid_token"/"inactive_user"）
     """
     # 如果之前已经解析过，直接复用
@@ -105,8 +105,13 @@ def get_current_user(max_age: Optional[int] = 3600) -> Tuple[Optional[User], Opt
             for perm in role.permissions:
                 perms.add(perm.code)
 
-        g.current_user = user
+        # 只在 g 上缓存“值类型”信息，避免后续在会话之外访问 ORM 属性导致 DetachedInstanceError
+        g.current_user_id = user.id
+        g.current_user_username = user.username
         g.current_user_permissions = perms
+
+        # 返回的 user 仅用于向后兼容旧代码的身份检查场景
+        g.current_user = user
         return user, None
 
 

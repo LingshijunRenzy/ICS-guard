@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const auth = useAuthStore()
 
 function goHome() {
   router.push('/')
+}
+
+function logout() {
+  auth.setToken(null)
+  router.push('/login')
 }
 </script>
 
@@ -13,7 +20,10 @@ function goHome() {
     <div class="card">
       <h1>403 无权限</h1>
       <p>你已登录，但没有访问当前资源的权限。如需访问，请联系管理员调整角色或权限。</p>
-      <el-button type="primary" @click="goHome">返回首页</el-button>
+      <div class="actions">
+        <el-button type="primary" @click="goHome">返回首页</el-button>
+        <el-button type="danger" @click="logout">退出登录</el-button>
+      </div>
     </div>
   </div>
 </template>
@@ -42,6 +52,12 @@ h1 {
 p {
   margin-bottom: 24px;
   color: #6b7280;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
 }
 </style>
 

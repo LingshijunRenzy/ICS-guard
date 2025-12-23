@@ -12,6 +12,7 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -317,3 +318,66 @@ class Session(Base):
 
     def __repr__(self) -> str:
         return f"<Session(id={self.id}, user_id={self.user_id}, is_active={self.is_active})>"
+
+
+# ---------------------------------------------------------------------------
+# Flow 检测结果表
+# ---------------------------------------------------------------------------
+
+
+class AppFlow(Base):
+    """
+    流检测结果表。
+
+    存储从控制层接收到的工业流量（Flow）及其模型检测结果与状态。
+    """
+
+    __tablename__ = "app_flows"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    # Flow 标识
+    flow_id: Mapped[str] = mapped_column(String(128), unique=True, nullable=False, index=True)
+    source: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+    # Flow 核心信息快照
+    src_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    dst_ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+    src_port: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    dst_port: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    protocol: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+
+    start_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    end_time: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    duration: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    pkt_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    byte_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    pkt_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    byte_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    func_code_entropy: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    reg_addr_std: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
+    # 检测状态字段
+    detect_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending", index=True)
+    decision_level: Mapped[str] = mapped_column(String(16), nullable=False, default="normal")
+    prob: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    anomaly_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    detected_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # 其它辅助字段
+    raw_snapshot: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_app_flows_src_ip_created_at", "src_ip", "created_at"),
+        Index("ix_app_flows_decision_level_created_at", "decision_level", "created_at"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<AppFlow(id={self.id}, flow_id='{self.flow_id}', status='{self.detect_status}')>"

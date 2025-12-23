@@ -137,6 +137,16 @@ export interface AppRole {
   is_system: boolean
 }
 
+export interface CurrentUserProfile {
+  id: number
+  username: string
+  email?: string
+  display_name?: string
+  is_active: boolean
+  roles: string[]
+  permissions: string[]
+}
+
 export interface UiEventItem {
   type: string
   timestamp: string
@@ -213,13 +223,48 @@ export async function revokePolicy(
 }
 
 export async function fetchAlerts() {
-  const res = await apiClient.get<AlertItem[]>('/alerts')
-  return res.data
+  const res = await apiClient.get<{ alerts: Array<{
+    id: string
+    timestamp: string
+    type: string
+    severity: string
+    source_ip: string
+    description: string
+  }> }>('/alerts')
+
+  return res.data.alerts.map((item) => {
+    const mapped: AlertItem = {
+      id: item.id,
+      level: item.severity ?? 'info',
+      message: item.description ?? '',
+      created_at: item.timestamp,
+      source: item.source_ip,
+    }
+    return mapped
+  })
 }
 
 export async function fetchHoneypotLogs() {
-  const res = await apiClient.get<HoneypotLogItem[]>('/honeypot/logs')
-  return res.data
+  const res = await apiClient.get<{
+    logs: Array<{
+      id: string
+      timestamp: string
+      source_ip: string
+      request: string
+      response: string
+    }>
+  }>('/honeypot/logs')
+
+  return res.data.logs.map((item) => {
+    const mapped: HoneypotLogItem = {
+      id: item.id,
+      src_ip: item.source_ip,
+      dst_ip: 'HONEYPOT', // 后端目前未返回 dst_ip，这里用固定值标识目标为蜜罐
+      request: item.request,
+      timestamp: item.timestamp,
+    }
+    return mapped
+  })
 }
 
 export async function fetchModelMeta() {
@@ -271,6 +316,11 @@ export async function fetchUiEvents(params?: { limit?: number; types?: string })
   const res = await apiClient.get<{ items: UiEventItem[] }>('/events', {
     params,
   })
+  return res.data
+}
+
+export async function fetchCurrentUser() {
+  const res = await apiClient.get<CurrentUserProfile>('/auth/me')
   return res.data
 }
 

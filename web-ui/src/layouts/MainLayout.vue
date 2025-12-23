@@ -17,7 +17,33 @@ const menus = [
   { path: '/honeypot', label: '蜜罐日志', name: 'honeypot' },
   { path: '/model', label: '模型与系统', name: 'model' },
   { path: '/users', label: '用户管理', name: 'users' },
-]
+] as const
+
+const menuPermissions: Record<string, string[] | undefined> = {
+  '/': [],
+  '/topology': ['topology:read'],
+  '/monitor': ['topology:read'],
+  '/policies': ['policy:read'],
+  '/alerts': ['alert:read'],
+  '/honeypot': ['honeypot:read'],
+  '/model': ['model:read'],
+  '/users': ['user:manage'],
+}
+
+const visibleMenus = computed(() => {
+  const permsLoaded = auth.permissionsLoaded
+  const hasAnyPerm = auth.permissions.length > 0
+
+  // 权限尚未加载时，先展示全部菜单，后续由路由守卫兜底
+  if (!permsLoaded) return menus.slice()
+
+  return menus.filter((m) => {
+    const required = menuPermissions[m.path]
+    if (!required || required.length === 0) return true
+    if (!hasAnyPerm) return false
+    return required.some((p) => auth.hasPermission(p))
+  })
+})
 
 const isFullScreenPage = computed(
   () =>
@@ -26,7 +52,7 @@ const isFullScreenPage = computed(
 )
 
 function handleSelect(index: string) {
-  const item = menus.find((m) => m.path === index)
+  const item = visibleMenus.value.find((m) => m.path === index)
   if (item) {
     router.push(item.path)
   }
@@ -61,7 +87,7 @@ function handleLogout() {
               class="layout-menu"
               @select="handleSelect"
             >
-              <el-menu-item v-for="item in menus" :key="item.path" :index="item.path">
+              <el-menu-item v-for="item in visibleMenus" :key="item.path" :index="item.path">
                 <span class="menu-label">{{ item.label }}</span>
                 <span class="menu-decoration"></span>
               </el-menu-item>

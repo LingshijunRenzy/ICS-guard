@@ -67,6 +67,14 @@ def record_event_for_ui(event: Event) -> None:
 
     简单环形缓冲：只保留最近 _ui_events_max_len 条。
     """
+    # 对 FLOW_UPDATE 事件，默认补充 detect_status=pending，方便前端直接展示
+    if event.event_type == EventType.FLOW_UPDATE:
+        try:
+            event.data.setdefault("detect_status", "pending")
+        except Exception:
+            # 避免因数据结构异常中断记录
+            pass
+
     with _ui_events_lock:
         _ui_events.append(event)
         if len(_ui_events) > _ui_events_max_len:

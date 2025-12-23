@@ -2,7 +2,7 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { apiClient } from '@/api/client'
+import { apiClient, fetchCurrentUser } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
@@ -32,6 +32,13 @@ async function handleSubmit() {
             password: form.password,
         })
         auth.setToken(res.data.access_token)
+        // 登录成功后立即拉取当前用户权限，避免进入页面后再闪烁
+        try {
+            const profile = await fetchCurrentUser()
+            auth.setPermissions(profile.permissions || [])
+        } catch {
+            // 出错时交由全局拦截器和路由守卫兜底处理
+        }
         ElMessage.success('登录成功')
         const redirect = (route.query.redirect as string) || '/'
         router.push(redirect)

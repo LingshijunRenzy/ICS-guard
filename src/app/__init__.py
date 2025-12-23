@@ -82,6 +82,7 @@ def _init_event_subscriber(app: Flask) -> None:
     try:
         from .services import EventType, get_event_subscriber
         from .services.event_subscriber import record_event_for_ui
+        from .services.flow_detection import handle_flow_event, start_flow_detection_workers
         from .services.ui_events_ws import start_ui_ws_server
 
         manager = get_event_subscriber(app.config.get("CONTROLLER_WS_BASE_URL"))
@@ -96,15 +97,23 @@ def _init_event_subscriber(app: Flask) -> None:
         for et in EventType:
             manager.register_handler(et, _log_event)
             manager.register_handler(et, record_event_for_ui)
+            # 仅对 FLOW_UPDATE 事件挂接检测流水线 handler
+            if et == EventType.FLOW_UPDATE:
+                manager.register_handler(et, handle_flow_event)
 
         # 启动面向 UI 的 WebSocket 服务端
         ui_host = app.config.get("UI_WS_HOST", "0.0.0.0")
         ui_port = int(app.config.get("UI_WS_PORT", 8766))
         start_ui_ws_server(host=ui_host, port=ui_port)
 
+        # 启动 Flow 检测 worker
+        start_flow_detection_workers()
+
         # 订阅所有事件类型并在后台线程启动
         manager.start()
-        logger.info("Controller WebSocket event subscriber started (base=%s)", app.config.get("CONTROLLER_WS_BASE_URL"))
+        logger.info(
+            "Controller WebSocket event subscriber started (base=%s)", app.config.get("CONTROLLER_WS_BASE_URL")
+        )
     except Exception as e:
         # 避免影响应用启动，只记录警告
         logger.warning("Failed to initialize controller WebSocket subscriber: %s", e)

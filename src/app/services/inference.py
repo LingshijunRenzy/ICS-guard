@@ -256,7 +256,7 @@ class InferenceService:
         """获取阈值配置。"""
         return self._threshold_config
 
-    def build_feature_vector(self, flow: Dict[str, Any]) -> np.ndarray:
+    def build_feature_vector(self, flow: Dict[str, Any]) -> Any:
         """
         从 Flow 字典构建特征向量。
 
@@ -270,7 +270,14 @@ class InferenceService:
             if val is None or (isinstance(val, float) and np.isnan(val)):
                 val = self._feature_config.fill_values.get(col, 0.0)
             features.append(float(val))
-        return np.array(features).reshape(1, -1)
+
+        # 对于基于 sklearn 的模型（如 LGBMClassifier），使用带有列名的 DataFrame
+        # 可以避免 "X does not have valid feature names" 的警告。
+        try:
+            return pd.DataFrame([features], columns=self._feature_config.feature_columns)
+        except Exception:
+            # 兜底：如果 DataFrame 构造失败，退化为原来的 ndarray 行为
+            return np.array(features).reshape(1, -1)
 
     def predict_flow(self, flow: Dict[str, Any]) -> PredictionResult:
         """
