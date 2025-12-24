@@ -118,9 +118,11 @@ def start_ui_ws_server(host: str = "0.0.0.0", port: int = 8766) -> None:
   _running = True
 
   def _run() -> None:
-    global _loop, _server
+    global _loop, _server, _queue
     _loop = asyncio.new_event_loop()
     asyncio.set_event_loop(_loop)
+    # 在新 Loop 中重新初始化队列，确保其绑定到正确的 Loop
+    _queue = asyncio.Queue()
 
     async def _async_main() -> None:
       """

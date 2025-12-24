@@ -306,32 +306,45 @@ def _update_flows_detection(
                 # 推送 UI 事件
                 try:
                     # 1. 实时推送 (WebSocket)
-                    enqueue_ui_event(
-                        {
-                            "type": "flow_detection_update",
-                            "timestamp": now,
-                            "data": {
+                    # 仅当状态为 dangerous/suspicious 或概率较高时才推送，避免刷屏
+                    # 或者当状态发生变化时推送（需要缓存上一次状态，这里简化为只推异常）
+                    should_push = False
+                    if status in ("dangerous", "suspicious"):
+                        should_push = True
+                    elif prob > 0.1: # 稍微放宽一点，关注度高的才推
+                        should_push = True
+                    
+                    # 如果是第一次检测（没有历史记录），也可以推一下，但这里无法判断是否第一次
+                    # 暂时只推异常，减少刷屏
+                    
+                    if should_push:
+                        enqueue_ui_event(
+                            {
+                                "type": "flow_detection_update",
+                                "timestamp": now,
+                                "data": {
+                                    "flow_id": flow_id,
+                                    "detect_status": status,
+                                    "prob": prob,
+                                    "decision_level": decision_level,
+                                },
+                            }
+                        )
+                        
+                        # 2. 记录到自动化事件日志 (EventLog)
+                        # 构造一个内部事件并记录
+                        det_event = Event(
+                            event_type=EventType.FLOW_DETECTION,
+                            timestamp=now,
+                            data={
                                 "flow_id": flow_id,
                                 "detect_status": status,
+                                "label": label,
                                 "prob": prob,
                                 "decision_level": decision_level,
-                            },
-                        }
-                    )
-                    # 2. 记录到自动化事件日志 (EventLog)
-                    # 构造一个内部事件并记录
-                    det_event = Event(
-                        event_type=EventType.FLOW_DETECTION,
-                        timestamp=now,
-                        data={
-                            "flow_id": flow_id,
-                            "detect_status": status,
-                            "label": label,
-                            "prob": prob,
-                            "decision_level": decision_level,
-                        }
-                    )
-                    record_event_for_ui(det_event)
+                            }
+                        )
+                        record_event_for_ui(det_event)
                 except Exception as e:
                     logger.debug("Failed to push/record flow detection event: %s", e)
     except Exception as e:

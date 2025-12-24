@@ -84,8 +84,9 @@ def record_event_for_ui(event: Event) -> None:
         if len(_ui_events) > _ui_events_max_len:
             del _ui_events[0 : len(_ui_events) - _ui_events_max_len]
 
-    # 持久化逻辑：将非 FLOW_UPDATE 的重要事件存入数据库
-    if event.event_type != EventType.FLOW_UPDATE:
+    # 持久化逻辑：将非 FLOW_UPDATE 和 NETWORK_STATUS 的重要事件存入数据库
+    # NETWORK_STATUS 属于高频监控数据，不适合作为日志持久化
+    if event.event_type not in (EventType.FLOW_UPDATE, EventType.NETWORK_STATUS):
         try:
             with session_scope() as session:
                 # 提取相关资源 ID
@@ -93,9 +94,7 @@ def record_event_for_ui(event: Event) -> None:
                 data = event.data
                 etype = event.event_type.value if hasattr(event.event_type, "value") else str(event.event_type)
                 
-                if etype == "network_status_update":
-                    related_resource = data.get("node_id")
-                elif etype == "traffic_anomaly":
+                if etype == "traffic_anomaly":
                     related_resource = data.get("flow_id")
                 elif etype == "honeypot_interaction":
                     related_resource = data.get("source_ip")
