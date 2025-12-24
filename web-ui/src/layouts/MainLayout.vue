@@ -3,10 +3,12 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { useThemeStore } from '@/stores/theme'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const themeStore = useThemeStore()
 
 const menus = [
   { path: '/', label: '概览', name: 'home' },
@@ -17,6 +19,7 @@ const menus = [
   { path: '/honeypot', label: '蜜罐日志', name: 'honeypot' },
   { path: '/model', label: '模型与系统', name: 'model' },
   { path: '/users', label: '用户管理', name: 'users' },
+  { path: '/audit', label: '审计日志', name: 'audit' },
 ] as const
 
 const menuPermissions: Record<string, string[] | undefined> = {
@@ -28,6 +31,7 @@ const menuPermissions: Record<string, string[] | undefined> = {
   '/honeypot': ['honeypot:read'],
   '/model': ['model:read'],
   '/users': ['user:manage'],
+  '/audit': ['audit:read'],
 }
 
 const visibleMenus = computed(() => {
@@ -75,6 +79,9 @@ function handleLogout() {
         </div>
         <div class="layout-header-right">
           <div class="header-status">SYSTEM STATUS: <span style="color: var(--cyber-success)">NORMAL</span></div>
+          <el-button type="text" @click="themeStore.toggleTheme" class="theme-toggle-btn">
+            {{ themeStore.theme === 'dark' ? 'LIGHT_MODE' : 'DARK_MODE' }}
+          </el-button>
           <el-button type="text" @click="handleLogout" class="logout-btn">LOGOUT</el-button>
         </div>
       </header>
@@ -168,14 +175,17 @@ function handleLogout() {
   letter-spacing: 1px;
 }
 
-.logout-btn {
-  color: var(--cyber-danger) !important;
+.logout-btn,
+.theme-toggle-btn {
+  color: var(--cyber-text-main) !important;
   font-family: 'Orbitron', sans-serif;
   letter-spacing: 1px;
 }
 
-.logout-btn:hover {
-  text-shadow: 0 0 5px var(--cyber-danger);
+.logout-btn:hover,
+.theme-toggle-btn:hover {
+  text-shadow: 0 0 5px var(--cyber-secondary);
+  color: var(--cyber-secondary) !important;
 }
 
 .layout-body {

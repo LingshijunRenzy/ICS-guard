@@ -10,6 +10,7 @@ from flask import Blueprint, jsonify
 
 from ..auth import require_permissions
 from ..services.controller_client import get_controller_client
+from ..utils.audit import record_audit_log
 
 bp = Blueprint("topology", __name__, url_prefix="/api")
 
@@ -119,8 +120,24 @@ def start_node(node_id: str):
 
     POST /api/nodes/{node_id}/start
     """
-    result = _call_controller(lambda c: c.start_node(node_id))
-    return jsonify(result)
+    try:
+        result = _call_controller(lambda c: c.start_node(node_id))
+        record_audit_log(
+            action="NODE_START",
+            resource="node",
+            resource_id=node_id,
+            status="success"
+        )
+        return jsonify(result)
+    except Exception as e:
+        record_audit_log(
+            action="NODE_START",
+            resource="node",
+            resource_id=node_id,
+            status="failure",
+            error_message=str(e)
+        )
+        raise
 
 
 @bp.post("/nodes/<string:node_id>/stop")
@@ -131,8 +148,24 @@ def stop_node(node_id: str):
 
     POST /api/nodes/{node_id}/stop
     """
-    result = _call_controller(lambda c: c.stop_node(node_id))
-    return jsonify(result)
+    try:
+        result = _call_controller(lambda c: c.stop_node(node_id))
+        record_audit_log(
+            action="NODE_STOP",
+            resource="node",
+            resource_id=node_id,
+            status="success"
+        )
+        return jsonify(result)
+    except Exception as e:
+        record_audit_log(
+            action="NODE_STOP",
+            resource="node",
+            resource_id=node_id,
+            status="failure",
+            error_message=str(e)
+        )
+        raise
 
 
 @bp.post("/nodes/<string:node_id>/restart")
@@ -143,8 +176,24 @@ def restart_node(node_id: str):
 
     POST /api/nodes/{node_id}/restart
     """
-    result = _call_controller(lambda c: c.restart_node(node_id))
-    return jsonify(result)
+    try:
+        result = _call_controller(lambda c: c.restart_node(node_id))
+        record_audit_log(
+            action="NODE_RESTART",
+            resource="node",
+            resource_id=node_id,
+            status="success"
+        )
+        return jsonify(result)
+    except Exception as e:
+        record_audit_log(
+            action="NODE_RESTART",
+            resource="node",
+            resource_id=node_id,
+            status="failure",
+            error_message=str(e)
+        )
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -160,8 +209,24 @@ def enable_link(link_id: str):
 
     POST /api/links/{link_id}/enable
     """
-    result = _call_controller(lambda c: c.enable_link(link_id))
-    return jsonify(result)
+    try:
+        result = _call_controller(lambda c: c.enable_link(link_id))
+        record_audit_log(
+            action="LINK_ENABLE",
+            resource="link",
+            resource_id=link_id,
+            status="success"
+        )
+        return jsonify(result)
+    except Exception as e:
+        record_audit_log(
+            action="LINK_ENABLE",
+            resource="link",
+            resource_id=link_id,
+            status="failure",
+            error_message=str(e)
+        )
+        raise
 
 
 @bp.post("/links/<string:link_id>/disable")
@@ -172,8 +237,24 @@ def disable_link(link_id: str):
 
     POST /api/links/{link_id}/disable
     """
-    result = _call_controller(lambda c: c.disable_link(link_id))
-    return jsonify(result)
+    try:
+        result = _call_controller(lambda c: c.disable_link(link_id))
+        record_audit_log(
+            action="LINK_DISABLE",
+            resource="link",
+            resource_id=link_id,
+            status="success"
+        )
+        return jsonify(result)
+    except Exception as e:
+        record_audit_log(
+            action="LINK_DISABLE",
+            resource="link",
+            resource_id=link_id,
+            status="failure",
+            error_message=str(e)
+        )
+        raise
 
 
 # ---------------------------------------------------------------------------

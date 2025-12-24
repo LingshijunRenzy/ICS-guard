@@ -267,45 +267,60 @@ onMounted(() => {
 
 <template>
   <div class="policies-container">
-    <!-- 顶部工具栏 -->
-    <div class="toolbar cyber-border">
-      <div class="toolbar-left">
-        <span class="toolbar-title">>> POLICY MANAGEMENT</span>
+    <div class="page-header">
+      <div class="header-left">
+        <h2 class="cli-title">POLICY_MANAGEMENT</h2>
+        <p class="cli-subtitle">安全策略配置与下发</p>
       </div>
-      <div class="toolbar-filters">
-        <el-select v-model="filterType" placeholder="类型" clearable style="width: 120px" @change="loadPolicies">
-          <el-option label="全部" value="" />
-          <el-option label="节点" value="node" />
-          <el-option label="连接" value="connection" />
-          <el-option label="流" value="flow" />
-        </el-select>
-        <el-select v-model="filterStatus" placeholder="状态" clearable style="width: 120px" @change="loadPolicies">
-          <el-option label="全部" value="" />
-          <el-option label="激活" value="active" />
-          <el-option label="禁用" value="inactive" />
-          <el-option label="待定" value="pending" />
-        </el-select>
-        <el-input v-model="searchText" placeholder="搜索 ID 或名称" style="width: 200px" clearable />
-      </div>
-      <div class="toolbar-right">
+      <div class="header-actions">
         <el-button type="primary" @click="openDrawer('create')">+ 新建策略</el-button>
       </div>
     </div>
 
+    <!-- 顶部工具栏 -->
+    <el-card class="filter-card cli-card">
+      <el-form :inline="true" class="filter-form">
+        <el-form-item label="类型">
+          <el-select v-model="filterType" placeholder="全部" clearable style="width: 150px" @change="loadPolicies">
+            <el-option label="全部" value="" />
+            <el-option label="节点 (Node)" value="node" />
+            <el-option label="连接 (Link)" value="connection" />
+            <el-option label="流 (Flow)" value="flow" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="filterStatus" placeholder="全部" clearable style="width: 150px" @change="loadPolicies">
+            <el-option label="全部" value="" />
+            <el-option label="激活" value="active" />
+            <el-option label="禁用" value="inactive" />
+            <el-option label="待定" value="pending" />
+          </el-select>
+        </el-form-item>
+        <el-form-item>
+          <el-input v-model="searchText" placeholder="搜索 ID 或名称" style="width: 250px" clearable />
+        </el-form-item>
+      </el-form>
+    </el-card>
+
     <!-- 策略列表 -->
-    <div class="policies-table cyber-border">
-      <el-table v-loading="loading" :data="filteredPolicies" stripe style="width: 100%"
-        :row-class-name="() => 'cyber-table-row'">
-        <el-table-column prop="id" label="ID" width="180" />
-        <el-table-column prop="name" label="名称" min-width="200" />
-        <el-table-column prop="type" label="类型" width="200">
+    <el-card class="table-card cli-card">
+      <el-table v-loading="loading" :data="filteredPolicies" style="width: 100%" class="cli-table">
+        <el-table-column prop="id" label="ID" width="180" show-overflow-tooltip />
+        <el-table-column prop="name" label="名称" min-width="200" show-overflow-tooltip />
+        <el-table-column prop="type" label="类型" width="150">
           <template #default="{ row }">
-            <span class="type-badge" :class="row.type">{{ row.type.toUpperCase() }}</span>
+            <el-tag :type="row.type === 'flow' ? 'danger' : row.type === 'connection' ? 'warning' : 'success'"
+              effect="dark" class="cli-tag">
+              {{ row.type.toUpperCase() }}
+            </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="100">
+        <el-table-column prop="status" label="状态" width="120">
           <template #default="{ row }">
-            <span class="status-badge" :class="row.status">{{ row.status.toUpperCase() }}</span>
+            <el-tag :type="row.status === 'active' ? 'success' : row.status === 'inactive' ? 'info' : 'warning'"
+              effect="plain" class="cli-tag">
+              {{ row.status.toUpperCase() }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="priority" label="优先级" width="100" sortable>
@@ -325,7 +340,7 @@ onMounted(() => {
           </template>
         </el-table-column>
       </el-table>
-    </div>
+    </el-card>
 
     <!-- 右侧抽屉 -->
     <el-drawer v-model="drawerVisible"
@@ -635,121 +650,67 @@ onMounted(() => {
 
 <style scoped>
 .policies-container {
-  padding: 24px;
-  background-color: var(--cyber-bg);
-  color: var(--cyber-text);
-  font-family: '0xProto Nerd Font', monospace;
-  min-height: calc(100vh - 120px);
+  padding: 20px;
+    max-width: 1600px;
+    margin: 0 auto;
 }
 
-.toolbar {
-  background: rgba(10, 15, 20, 0.7);
-  border: 1px solid var(--cyber-border);
-  padding: 16px 20px;
-  margin-bottom: 20px;
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 24px;
 }
 
-.toolbar-title {
-  font-size: 1.2rem;
-  font-weight: bold;
-  color: var(--cyber-primary);
-  letter-spacing: 2px;
+.header-left h2 {
+  margin: 0;
+  font-size: 24px;
+  color: var(--el-text-color-primary);
 }
 
-.toolbar-filters {
+.header-left p {
+  margin: 8px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+}
+
+.filter-card {
+  margin-bottom: 20px;
+}
+
+.filter-form {
   display: flex;
-  gap: 12px;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
-.toolbar-right {
-  display: flex;
-  gap: 12px;
-}
-
-.policies-table {
-  background: rgba(10, 15, 20, 0.7);
-  border: 1px solid var(--cyber-border);
-  padding: 20px;
-}
-
-:deep(.cyber-table-row) {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-:deep(.cyber-table-row:hover) {
-  background: rgba(0, 240, 255, 0.1);
-}
-
-.type-badge {
-  padding: 4px 8px;
-  border-radius: 2px;
-  font-size: 0.85rem;
-  font-weight: bold;
-}
-
-.type-badge.node {
-  background: rgba(0, 240, 255, 0.2);
-  color: var(--cyber-primary);
-}
-
-.type-badge.connection {
-  background: rgba(255, 200, 0, 0.2);
-  color: #ffc800;
-}
-
-.type-badge.flow {
-  background: rgba(255, 0, 100, 0.2);
-  color: var(--cyber-danger);
-}
-
-.status-badge {
-  padding: 4px 8px;
-  border-radius: 2px;
-  font-size: 0.85rem;
-  font-weight: bold;
-}
-
-.status-badge.active {
-  background: rgba(0, 255, 100, 0.2);
-  color: var(--cyber-success);
-}
-
-.status-badge.inactive {
-  background: rgba(100, 100, 100, 0.2);
-  color: #999;
-}
-
-.status-badge.pending {
-  background: rgba(255, 200, 0, 0.2);
-  color: var(--cyber-warning);
+.filter-form .el-form-item {
+  margin-bottom: 0;
+  margin-right: 16px;
 }
 
 .priority-value {
   font-weight: bold;
-  color: var(--cyber-primary);
+  color: var(--cyber-secondary);
 }
 
 .policy-drawer :deep(.el-drawer__header) {
   background: rgba(10, 15, 20, 0.9);
-  border-bottom: 1px solid var(--cyber-border);
-  color: var(--cyber-text);
+  border-bottom: 1px solid var(--el-border-color);
+    color: var(--cyber-text-main);
   padding: 20px;
 }
 
 .policy-drawer :deep(.el-drawer__body) {
   background: var(--cyber-bg);
-  color: var(--cyber-text);
+  color: var(--cyber-text-main);
   padding: 20px;
   overflow-y: auto;
 }
 
 .policy-detail,
 .policy-form {
-  color: var(--cyber-text);
+  color: var(--cyber-text-main);
 }
 
 .detail-section,
@@ -762,7 +723,7 @@ onMounted(() => {
 .section-title {
   font-size: 1.1rem;
   font-weight: bold;
-  color: var(--cyber-primary);
+  color: var(--cyber-secondary);
   margin-bottom: 15px;
   letter-spacing: 1px;
 }
@@ -775,7 +736,7 @@ onMounted(() => {
 
 .detail-label {
   min-width: 100px;
-  color: var(--cyber-secondary);
+  color: var(--cyber-text-sub);
   font-weight: bold;
 }
 
@@ -786,12 +747,12 @@ onMounted(() => {
 
 .json-preview {
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--cyber-border);
+  border: 1px solid var(--el-border-color);
   padding: 15px;
   border-radius: 4px;
   font-family: '0xProto Nerd Font', monospace;
   font-size: 0.9rem;
-  color: var(--cyber-primary);
+  color: var(--cyber-secondary);
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;
@@ -814,7 +775,7 @@ onMounted(() => {
 .drawer-actions {
   margin-top: 30px;
   padding-top: 20px;
-  border-top: 1px solid var(--cyber-border);
+  border-top: 1px solid var(--el-border-color);
   display: flex;
   gap: 12px;
   justify-content: flex-end;
@@ -822,31 +783,8 @@ onMounted(() => {
 
 .form-hint {
   font-size: 0.85rem;
-  color: var(--cyber-text-dim);
+  color: var(--cyber-text-sub);
   margin-top: 5px;
-}
-
-:deep(.el-input__inner),
-:deep(.el-textarea__inner),
-:deep(.el-select .el-input__inner) {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--cyber-border);
-  color: var(--cyber-text);
-}
-
-:deep(.el-input__inner:focus),
-:deep(.el-textarea__inner:focus) {
-  border-color: var(--cyber-primary);
-}
-
-:deep(.el-button--primary) {
-  background: var(--cyber-primary);
-  border-color: var(--cyber-primary);
-  color: #000;
-}
-
-:deep(.el-button--primary:hover) {
-  background: rgba(0, 240, 255, 0.8);
 }
 
 /* 修复表格斑马纹背景色过亮的问题 */

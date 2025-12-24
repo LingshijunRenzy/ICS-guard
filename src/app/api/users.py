@@ -18,6 +18,7 @@ from werkzeug.security import generate_password_hash
 from ..auth import require_permissions
 from ..db import session_scope
 from ..db.models import Role, User
+from ..utils.audit import record_audit_log
 
 bp = Blueprint("users", __name__, url_prefix="/api/users")
 
@@ -105,6 +106,14 @@ def create_user():
         session.add(user)
         session.flush()  # 获取自增 ID
 
+        record_audit_log(
+            action="USER_CREATE",
+            resource="user",
+            resource_id=str(user.id),
+            payload={"username": username, "email": email, "roles": role_names},
+            status="success"
+        )
+
         return jsonify({"user": _user_to_dict(user)}), 201
 
 
@@ -146,6 +155,15 @@ def update_user(user_id: int):
                 user.roles = []
 
         session.flush()
+        
+        record_audit_log(
+            action="USER_UPDATE",
+            resource="user",
+            resource_id=str(user.id),
+            payload=payload,
+            status="success"
+        )
+        
         return jsonify({"user": _user_to_dict(user)})
 
 
@@ -162,7 +180,17 @@ def delete_user(user_id: int):
         if not user:
             return jsonify({"error": "not_found", "message": "user not found"}), 404
 
+        username = user.username
         session.delete(user)
+        
+        record_audit_log(
+            action="USER_DELETE",
+            resource="user",
+            resource_id=str(user_id),
+            payload={"username": username},
+            status="success"
+        )
+        
         return jsonify({"status": "success"})
 
 

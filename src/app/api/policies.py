@@ -14,6 +14,7 @@ from ..services.controller_client import (
     ControllerClientError,
     get_controller_client,
 )
+from ..utils.audit import record_audit_log
 
 bp = Blueprint("policies", __name__, url_prefix="/api/policies")
 
@@ -97,8 +98,27 @@ def create_policy():
     payload: Dict[str, Any] = request.get_json(silent=True) or {}
     policy_data = payload.get("policy", payload)
 
-    result = _call_controller(lambda c: c.create_policy(policy_data))
-    return jsonify(result), 201
+    try:
+        result = _call_controller(lambda c: c.create_policy(policy_data))
+        policy_id = result.get("policy_id")
+        
+        record_audit_log(
+            action="POLICY_CREATE",
+            resource="policy",
+            resource_id=policy_id,
+            payload=policy_data,
+            status="success"
+        )
+        return jsonify(result)
+    except Exception as e:
+        record_audit_log(
+            action="POLICY_CREATE",
+            resource="policy",
+            payload=policy_data,
+            status="failure",
+            error_message=str(e)
+        )
+        raise
 
 
 @bp.put("/<string:policy_id>")
@@ -124,8 +144,26 @@ def update_policy(policy_id: str):
     payload: Dict[str, Any] = request.get_json(silent=True) or {}
     policy_data = payload.get("policy", payload)
 
-    result = _call_controller(lambda c: c.update_policy(policy_id, policy_data))
-    return jsonify(result)
+    try:
+        result = _call_controller(lambda c: c.update_policy(policy_id, policy_data))
+        record_audit_log(
+            action="POLICY_UPDATE",
+            resource="policy",
+            resource_id=policy_id,
+            payload=policy_data,
+            status="success"
+        )
+        return jsonify(result)
+    except Exception as e:
+        record_audit_log(
+            action="POLICY_UPDATE",
+            resource="policy",
+            resource_id=policy_id,
+            payload=policy_data,
+            status="failure",
+            error_message=str(e)
+        )
+        raise
 
 
 @bp.delete("/<string:policy_id>")
@@ -143,8 +181,24 @@ def delete_policy(policy_id: str):
         "policy_id": string
     }
     """
-    result = _call_controller(lambda c: c.delete_policy(policy_id))
-    return jsonify(result)
+    try:
+        result = _call_controller(lambda c: c.delete_policy(policy_id))
+        record_audit_log(
+            action="POLICY_DELETE",
+            resource="policy",
+            resource_id=policy_id,
+            status="success"
+        )
+        return jsonify(result)
+    except Exception as e:
+        record_audit_log(
+            action="POLICY_DELETE",
+            resource="policy",
+            resource_id=policy_id,
+            status="failure",
+            error_message=str(e)
+        )
+        raise
 
 
 @bp.post("/<string:policy_id>/apply")
@@ -174,10 +228,28 @@ def apply_policy(policy_id: str):
     target_links: List[str] = payload.get("target_links", [])
     target_flows: List[str] = payload.get("target_flows", [])
 
-    result = _call_controller(
-        lambda c: c.apply_policy(policy_id, target_nodes, target_links, target_flows)
-    )
-    return jsonify(result)
+    try:
+        result = _call_controller(
+            lambda c: c.apply_policy(policy_id, target_nodes, target_links, target_flows)
+        )
+        record_audit_log(
+            action="POLICY_APPLY",
+            resource="policy",
+            resource_id=policy_id,
+            payload=payload,
+            status="success"
+        )
+        return jsonify(result)
+    except Exception as e:
+        record_audit_log(
+            action="POLICY_APPLY",
+            resource="policy",
+            resource_id=policy_id,
+            payload=payload,
+            status="failure",
+            error_message=str(e)
+        )
+        raise
 
 
 @bp.post("/<string:policy_id>/revoke")
@@ -207,7 +279,25 @@ def revoke_policy(policy_id: str):
     target_links: List[str] = payload.get("target_links", [])
     target_flows: List[str] = payload.get("target_flows", [])
 
-    result = _call_controller(
-        lambda c: c.revoke_policy(policy_id, target_nodes, target_links, target_flows)
-    )
-    return jsonify(result)
+    try:
+        result = _call_controller(
+            lambda c: c.revoke_policy(policy_id, target_nodes, target_links, target_flows)
+        )
+        record_audit_log(
+            action="POLICY_REVOKE",
+            resource="policy",
+            resource_id=policy_id,
+            payload=payload,
+            status="success"
+        )
+        return jsonify(result)
+    except Exception as e:
+        record_audit_log(
+            action="POLICY_REVOKE",
+            resource="policy",
+            resource_id=policy_id,
+            payload=payload,
+            status="failure",
+            error_message=str(e)
+        )
+        raise

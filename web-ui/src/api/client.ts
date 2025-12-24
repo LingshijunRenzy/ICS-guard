@@ -155,6 +155,28 @@ export interface UiEventItem {
   data: Record<string, any>
 }
 
+export interface AuditLog {
+  id: number
+  user_id: number | null
+  username: string | null
+  action: string
+  resource: string | null
+  resource_id: string | null
+  payload_snapshot: string | null
+  ip_address: string | null
+  user_agent: string | null
+  status: string
+  error_message: string | null
+  created_at: string
+}
+
+export interface AuditLogsResponse {
+  total: number
+  page: number
+  per_page: number
+  logs: AuditLog[]
+}
+
 // ---- 封装的 API 函数（只做最小封装，不加多余逻辑） ----
 
 export async function fetchTopology() {
@@ -306,6 +328,42 @@ export async function updateUser(userId: number, payload: Partial<{
   roles: string[]
 }>) {
   const res = await apiClient.put<{ user: AppUser }>(`/users/${userId}`, payload)
+  return res.data
+}
+
+// ---- 审计日志 ----
+
+export async function fetchAuditLogs(params: {
+  start_time?: string
+  end_time?: string
+  user_id?: number
+  action?: string
+  status?: string
+  resource?: string
+  page?: number
+  per_page?: number
+}) {
+  const res = await apiClient.get<AuditLogsResponse>('/audit', { params })
+  return res.data
+}
+
+export async function fetchAuditActions() {
+  const res = await apiClient.get<{ actions: string[] }>('/audit/actions')
+  return res.data.actions
+}
+
+export async function exportAuditLogs(params: {
+  start_time?: string
+  end_time?: string
+  user_id?: number
+  action?: string
+  status?: string
+  resource?: string
+}) {
+  const res = await apiClient.get('/audit/export', {
+    params,
+    responseType: 'blob',
+  })
   return res.data
 }
 

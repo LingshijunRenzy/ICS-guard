@@ -18,6 +18,7 @@ from werkzeug.security import check_password_hash
 from ..auth import create_access_token, get_current_user
 from ..db import session_scope
 from ..db.models import User
+from ..utils.audit import record_audit_log
 
 bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
@@ -56,14 +57,34 @@ def login():
         user = session.query(User).filter_by(username=username).first()
 
         if not user or not user.is_active:
+            record_audit_log(
+                action="LOGIN",
+                username=username,
+                status="failure",
+                error_message="Invalid username or account inactive"
+            )
             return jsonify({"error": "invalid_credentials", "message": "Invalid username or password"}), 401
 
         if not check_password_hash(user.password_hash, password):
+            record_audit_log(
+                action="LOGIN",
+                user_id=user.id,
+                username=username,
+                status="failure",
+                error_message="Invalid password"
+            )
             return jsonify({"error": "invalid_credentials", "message": "Invalid username or password"}), 401
 
         # 生成访问令牌
         expires_in = 3600
         access_token = create_access_token(user, expires_in=expires_in)
+
+        record_audit_log(
+            action="LOGIN",
+            user_id=user.id,
+            username=username,
+            status="success"
+        )
 
         return jsonify(
             {

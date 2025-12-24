@@ -1,15 +1,12 @@
 /* 赛博朋克·战术全息风格主题 */
 
-:root {
+:root,
+[data-theme='dark'] {
   /* 核心色板 */
   --cyber-bg: #050505;
-  /* 更深邃的黑 */
   --cyber-primary: #FFFFFF;
-  /* 改为纯白作为主色 */
   --cyber-secondary: #2DFEFF;
-  /* 青色保留用于高亮 */
   --cyber-accent: #E020F0;
-  /* 紫色保留用于特殊状态 */
   --cyber-text-main: #FFFFFF;
   --cyber-text-sub: #AAAAAA;
   --cyber-mask: rgba(0, 0, 0, 0.85);
@@ -20,60 +17,103 @@
   --cyber-danger: #FF2A6D;
 
   /* 边框与发光 */
-  --cyber-border-primary: 1px solid #FFFFFF;
-  /* 纯白实线边框 */
+  --cyber-border-color: #FFFFFF;
+    --cyber-border-primary: 1px solid var(--cyber-border-color);
   --cyber-border-accent: 1px solid var(--cyber-accent);
   --cyber-glow-white: 0 0 4px rgba(255, 255, 255, 0.5);
-  /* 白色微发光 */
 
-  /* 字体 - 使用 0xProto Nerd Font */
+  /* 组件背景 */
+    --cyber-card-bg: rgba(0, 0, 0, 0.6);
+    --cyber-input-bg: rgba(0, 0, 0, 0.8);
+    --cyber-table-header-bg: rgba(255, 255, 255, 0.1);
+    --cyber-table-border: rgba(255, 255, 255, 0.3);
+    --cyber-row-hover: rgba(255, 255, 255, 0.05);
+    --cyber-btn-bg: rgba(0, 0, 0, 0.8);
+    --cyber-btn-text: #FFFFFF;
+    --cyber-btn-hover-bg: #FFFFFF;
+    --cyber-btn-hover-text: #000000;
+    --cyber-scanline: rgba(255, 255, 255, 0.03);
+  
+    /* 字体 */
   --cyber-font-title: '0xProto Nerd Font', monospace;
   --cyber-font-body: '0xProto Nerd Font', monospace;
 }
 
+[data-theme='light'] {
+  /* 核心色板 - 亮色模式 */
+  --cyber-bg: #F0F2F5;
+  --cyber-primary: #1A1A1A;
+  --cyber-secondary: #00A3A3;
+  --cyber-accent: #B020C0;
+  --cyber-text-main: #1A1A1A;
+  --cyber-text-sub: #5E5E5E;
+  --cyber-mask: rgba(255, 255, 255, 0.85);
+
+  /* 辅助色 - 亮色微调 */
+  --cyber-success: #008F58;
+  --cyber-warning: #B88600;
+  --cyber-danger: #D00040;
+
+  /* 边框与发光 */
+  --cyber-border-color: #1A1A1A;
+  --cyber-border-primary: 1px solid var(--cyber-border-color);
+  --cyber-border-accent: 1px solid var(--cyber-accent);
+  --cyber-glow-white: 0 0 4px rgba(0, 0, 0, 0.1);
+
+  /* 组件背景 */
+  --cyber-card-bg: rgba(255, 255, 255, 0.9);
+  --cyber-input-bg: #FFFFFF;
+  --cyber-table-header-bg: rgba(0, 0, 0, 0.05);
+  --cyber-table-border: rgba(0, 0, 0, 0.1);
+  --cyber-row-hover: rgba(0, 0, 0, 0.02);
+  --cyber-btn-bg: #FFFFFF;
+  --cyber-btn-text: #1A1A1A;
+  --cyber-btn-hover-bg: #1A1A1A;
+  --cyber-btn-hover-text: #FFFFFF;
+  --cyber-scanline: rgba(0, 0, 0, 0.02);
+}
 /* ---- 全局基础重置 ---- */
 body {
   background-color: var(--cyber-bg);
   color: var(--cyber-text-main);
   font-family: var(--cyber-font-body);
   /* 背景纹理：极淡的扫描线 */
-  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-image: linear-gradient(var(--cyber-scanline) 1px, transparent 1px);
   background-size: 100% 4px;
   overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* 覆盖 Element Plus 变量 */
 :root {
   --el-color-primary: var(--cyber-secondary);
-  /* 交互组件保留青色高亮 */
   --el-color-success: var(--cyber-success);
   --el-color-warning: var(--cyber-warning);
   --el-color-danger: var(--cyber-danger);
   --el-bg-color: var(--cyber-bg);
-  --el-bg-color-overlay: #000000;
+  --el-bg-color-overlay: var(--cyber-card-bg);
   --el-text-color-primary: var(--cyber-text-main);
   --el-text-color-regular: var(--cyber-text-sub);
-  --el-border-color: #FFFFFF;
-  /* 全局白色边框 */
-  --el-border-color-light: rgba(255, 255, 255, 0.3);
+  --el-border-color: var(--cyber-border-color);
+    --el-border-color-light: var(--cyber-table-border);
   --el-fill-color-blank: transparent;
 }
 
 /* ---- 组件样式覆盖 ---- */
 
-/* 卡片 - 纯白细边框，无圆角 */
+/* 卡片 */
 .el-card {
-  background-color: rgba(0, 0, 0, 0.6) !important;
-  border: 1px solid #FFFFFF !important;
+  background-color: var(--cyber-card-bg) !important;
+    border: 1px solid var(--cyber-border-color) !important;
   border-radius: 0 !important;
-  /* 去除圆角 */
   color: var(--cyber-text-main) !important;
   backdrop-filter: blur(2px);
   position: relative;
   overflow: visible !important;
+  transition: all 0.3s ease;
 }
 
-/* 卡片装饰角标 - 改为实心白块 */
+/* 卡片装饰角标 */
 .el-card::before {
   content: '';
   position: absolute;
@@ -81,7 +121,7 @@ body {
   left: -1px;
   width: 6px;
   height: 6px;
-  background: #FFFFFF;
+  background: var(--cyber-border-color);
   z-index: 1;
   border: none;
 }
@@ -93,37 +133,38 @@ body {
   right: -1px;
   width: 6px;
   height: 6px;
-  background: #FFFFFF;
+  background: var(--cyber-border-color);
   z-index: 1;
   border: none;
 }
 
 .el-card__header {
-  border-bottom: 1px solid #FFFFFF !important;
+  border-bottom: 1px solid var(--cyber-border-color) !important;
   font-family: var(--cyber-font-title);
   text-transform: uppercase;
   letter-spacing: 2px;
-  color: #FFFFFF;
-  background: rgba(255, 255, 255, 0.05);
+  color: var(--cyber-text-main);
+    background: var(--cyber-table-header-bg);
 }
 
 /* 表格 */
 .el-table {
   --el-table-bg-color: transparent !important;
   --el-table-tr-bg-color: transparent !important;
-  --el-table-header-bg-color: rgba(255, 255, 255, 0.1) !important;
-  --el-table-border-color: rgba(255, 255, 255, 0.3) !important;
+  --el-table-header-bg-color: var(--cyber-table-header-bg) !important;
+    --el-table-border-color: var(--cyber-table-border) !important;
   --el-table-text-color: var(--cyber-text-sub) !important;
-  --el-table-header-text-color: #FFFFFF !important;
+  --el-table-header-text-color: var(--cyber-text-main) !important;
+    --el-table-row-hover-bg-color: var(--cyber-row-hover) !important;
   font-family: var(--cyber-font-body);
 }
 
-/* 按钮 - 白色边框 */
+/* 按钮 */
 .el-button {
-  background: rgba(0, 0, 0, 0.8) !important;
-  border: 1px solid #FFFFFF !important;
+  background: var(--cyber-btn-bg) !important;
+    border: 1px solid var(--cyber-border-color) !important;
   border-radius: 0 !important;
-  color: #FFFFFF !important;
+  color: var(--cyber-btn-text) !important;
   font-family: var(--cyber-font-title);
   text-transform: uppercase;
   transition: all 0.1s ease;
@@ -131,10 +172,9 @@ body {
 
 .el-button:hover,
 .el-button:focus {
-  background: #FFFFFF !important;
-  color: #000000 !important;
-  /* hover时反转颜色 */
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+  background: var(--cyber-btn-hover-bg) !important;
+    color: var(--cyber-btn-hover-text) !important;
+    box-shadow: 0 0 10px var(--cyber-glow-white);
   transform: none;
 }
 
@@ -151,26 +191,25 @@ body {
 }
 
 .el-menu-item:hover {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  color: #FFFFFF !important;
+  background-color: var(--cyber-row-hover) !important;
+    color: var(--cyber-text-main) !important;
 }
 
 .el-menu-item.is-active {
-  color: #FFFFFF !important;
-  background: rgba(255, 255, 255, 0.15) !important;
-  border-left: 2px solid #FFFFFF;
-  /* 白色激活条 */
+  color: var(--cyber-text-main) !important;
+    background: var(--cyber-table-header-bg) !important;
+    border-left: 2px solid var(--cyber-border-color);
 }
 
 /* 输入框 */
 .el-input__wrapper {
-  background-color: rgba(0, 0, 0, 0.8) !important;
-  box-shadow: 0 0 0 1px #FFFFFF inset !important;
+  background-color: var(--cyber-input-bg) !important;
+    box-shadow: 0 0 0 1px var(--cyber-border-color) inset !important;
   border-radius: 0 !important;
 }
 
 .el-input__inner {
-  color: #FFFFFF !important;
+  color: var(--cyber-text-main) !important;
   font-family: var(--cyber-font-body);
 }
 
@@ -190,4 +229,80 @@ body {
 .cyber-blink {
   animation: cyber-blink 2s steps(1) infinite;
   /* steps(1) 产生硬切换效果 */
+}
+/* ---- CLI 标签颜色覆盖 (高对比度) ---- */
+.cli-tag.el-tag--success {
+  background-color: var(--cyber-success) !important;
+  color: #000000 !important;
+  border: none !important;
+}
+
+.cli-tag.el-tag--warning {
+  background-color: var(--cyber-warning) !important;
+  color: #000000 !important;
+  border: none !important;
+}
+
+.cli-tag.el-tag--danger {
+  background-color: var(--cyber-danger) !important;
+  color: #000000 !important;
+  border: none !important;
+}
+
+.cli-tag.el-tag--info {
+  background-color: #d0d7de !important;
+  color: #000000 !important;
+  border: none !important;
+}
+
+/* ---- CLI 风格通用类 ---- */
+.cli-title {
+  font-family: var(--cyber-font-title);
+  font-size: 24px;
+  color: var(--cyber-text-main);
+  margin: 0;
+  letter-spacing: 2px;
+  text-shadow: 0 0 8px var(--cyber-glow-white);
+}
+
+.cli-subtitle {
+  font-family: var(--cyber-font-body);
+  font-size: 14px;
+  color: var(--cyber-text-sub);
+  margin: 5px 0 0 0;
+}
+
+.cli-text-primary {
+  color: var(--cyber-secondary);
+}
+
+.cli-text-danger {
+  color: var(--cyber-danger);
+}
+
+.cli-tag {
+  border-radius: 0 !important;
+  font-family: var(--cyber-font-body);
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.cli-tag-info {
+  background-color: #d0d7de;
+  color: #000000;
+  padding: 2px 6px;
+  font-family: var(--cyber-font-body);
+  font-size: 12px;
+}
+
+.cli-code-block {
+  background: #1a1a1a;
+  padding: 15px;
+  border-radius: 0;
+  border: 1px solid #333;
+  color: #00ff00;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-x: auto;
 }
