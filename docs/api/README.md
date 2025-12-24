@@ -913,15 +913,32 @@ API使用标准HTTP状态码来指示请求的成功或失败。在出现错误�
 
 ### 4. 拓扑变更通知
 - **连接端点**: `/ws/topology-changes`
-- **描述**: 实时推送网络拓扑变化
+- **描述**: 实时推送网络拓扑变化（增量更新）
 - **消息格式**:
   ```json
   {
     "event": "topology_change",
     "timestamp": "string",
     "data": {
-      "change_type": "string",
-      "details": {}
+      "change_type": "node_added | node_removed | link_added | link_removed | node_updated",
+      "details": {
+        "node": {
+          "id": "string",
+          "name": "string",
+          "type": "string",
+          "ip": "string",
+          "status": "string"
+        },
+        "node_id": "string",
+        "link": {
+          "id": "string",
+          "source": "string",
+          "target": "string",
+          "bandwidth": "number",
+          "status": "string"
+        },
+        "link_id": "string"
+      }
     }
   }
   ```
