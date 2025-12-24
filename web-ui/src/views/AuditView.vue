@@ -270,6 +270,6 @@ onMounted(() => {
 }
 
 :deep(.el-range-editor.el-input__inner) {
-    background-color: #1a1a1a !important;
+    background-color: var(--cyber-input-bg) !important;
 }
 </style>

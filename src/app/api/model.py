@@ -7,9 +7,12 @@
 from typing import Any, Dict
 
 from flask import Blueprint, jsonify, request
+from sqlalchemy import desc
 
 from .schemas import FlowInfo
 from ..auth import require_permissions
+from ..db import session_scope
+from ..db.models import FlowDetectionLog
 from ..services.inference import get_inference_service
 
 bp = Blueprint("model", __name__, url_prefix="/api")
@@ -79,6 +82,33 @@ def detect_flow():
         "decision_level": result.decision_level.value,
         "flow_id": payload.get("id", ""),
     })
+
+
+@bp.get("/flows/<string:flow_id>/history")
+@require_permissions("flow_history:read")
+def get_flow_history(flow_id: str):
+    """
+    获取指定 Flow 的检测历史记录。
+
+    GET /api/flows/{flow_id}/history
+    """
+    with session_scope() as session:
+        logs = session.query(FlowDetectionLog).filter_by(flow_id=flow_id).order_by(desc(FlowDetectionLog.created_at)).limit(100).all()
+        
+        return jsonify({
+            "flow_id": flow_id,
+            "history": [
+                {
+                    "id": log.id,
+                    "prob": log.prob,
+                    "label": log.label,
+                    "anomaly_score": log.anomaly_score,
+                    "decision_level": log.decision_level,
+                    "timestamp": log.created_at.isoformat(),
+                    "model_version": log.model_version
+                } for log in logs
+            ]
+        })
 
 
 @bp.get("/model/meta")

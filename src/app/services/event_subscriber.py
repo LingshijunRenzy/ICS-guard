@@ -24,6 +24,9 @@ from typing import Any, Callable, Dict, List, Optional, Set
 import websockets
 from websockets.exceptions import ConnectionClosed
 
+from ..db import session_scope
+from ..db.models import EventLog
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,6 +43,7 @@ class EventType(str, Enum):
     HONEYPOT_INTERACTION = "honeypot_interaction"
     TOPOLOGY_CHANGE = "topology_change"
     FLOW_UPDATE = "flow_update"
+    FLOW_DETECTION = "flow_detection_result"
 
 
 @dataclass
@@ -66,22 +70,64 @@ def record_event_for_ui(event: Event) -> None:
     记录事件到内存缓存，供前端查询最近事件使用。
 
     简单环形缓冲：只保留最近 _ui_events_max_len 条。
+    同时将重要事件持久化到数据库。
     """
-    # 对 FLOW_UPDATE 事件，默认补充 detect_status=pending，方便前端直接展示
+    # 对 FLOW_UPDATE 事件，默认补充 detect_status=pending，方便前端展示
     if event.event_type == EventType.FLOW_UPDATE:
         try:
             event.data.setdefault("detect_status", "pending")
         except Exception:
-            # 避免因数据结构异常中断记录
             pass
 
     with _ui_events_lock:
         _ui_events.append(event)
         if len(_ui_events) > _ui_events_max_len:
-            # 仅做简单裁剪，避免无限增长
             del _ui_events[0 : len(_ui_events) - _ui_events_max_len]
 
-    # 异步推送给 UI WebSocket 客户端（如果已启动）
+    # 持久化逻辑：将非 FLOW_UPDATE 的重要事件存入数据库
+    if event.event_type != EventType.FLOW_UPDATE:
+        try:
+            with session_scope() as session:
+                # 提取相关资源 ID
+                related_resource = None
+                data = event.data
+                etype = event.event_type.value if hasattr(event.event_type, "value") else str(event.event_type)
+                
+                if etype == "network_status_update":
+                    related_resource = data.get("node_id")
+                elif etype == "traffic_anomaly":
+                    related_resource = data.get("flow_id")
+                elif etype == "honeypot_interaction":
+                    related_resource = data.get("source_ip")
+                elif etype == "topology_change":
+                    related_resource = data.get("change_type")
+                elif etype == "flow_detection_result":
+                    related_resource = data.get("flow_id")
+
+                # 确定严重程度
+                severity = "info"
+                if etype in ("traffic_anomaly", "honeypot_interaction"):
+                    severity = "warning"
+                elif etype == "flow_detection_result":
+                    detect_status = data.get("detect_status")
+                    if detect_status == "dangerous":
+                        severity = "high"
+                    elif detect_status == "suspicious":
+                        severity = "warning"
+                
+                log = EventLog(
+                    event_type=etype,
+                    source="ai_model" if etype == "flow_detection_result" else "controller",
+                    severity=severity,
+                    payload_snapshot=json.dumps(event.data, ensure_ascii=False),
+                    related_resource=related_resource,
+                    processed_by="event_subscriber"
+                )
+                session.add(log)
+        except Exception as e:
+            logger.error("Failed to persist event log: %s", e)
+
+    # 异步推送给 UI WebSocket 客户端
     try:
         from .ui_events_ws import enqueue_ui_event
 
@@ -292,6 +338,10 @@ class EventSubscriberManager:
             event_types = set(EventType)
 
         for et in event_types:
+            # Skip internal events that don't have external WS endpoints
+            if et not in WS_ENDPOINTS:
+                continue
+
             if et not in self._subscribers:
                 endpoint = WS_ENDPOINTS[et]
                 subscriber = EndpointSubscriber(

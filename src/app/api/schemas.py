@@ -100,6 +100,28 @@ class FlowInfo(TypedDict):
     path_hops: Optional[List[PathHop]]  # (可选) 表示经过的节点路径
 
 
+class EventLogSchema(TypedDict):
+    id: int
+    type: str
+    source: str
+    severity: str
+    payload: Optional[str]
+    resource: Optional[str]
+    processed_by: Optional[str]
+    timestamp: str
+
+
+class FlowDetectionLogSchema(TypedDict):
+    id: int
+    flow_id: str
+    prob: float
+    label: Optional[str]
+    anomaly_score: float
+    decision_level: str
+    timestamp: str
+    model_version: Optional[str]
+
+
 class ActionParams(TypedDict, total=False):
     """动作参数基类，具体参数根据action_type而定"""
     pass

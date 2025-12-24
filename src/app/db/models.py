@@ -390,3 +390,63 @@ class AppFlow(Base):
 
     def __repr__(self) -> str:
         return f"<AppFlow(id={self.id}, flow_id='{self.flow_id}', status='{self.detect_status}')>"
+
+
+# ---------------------------------------------------------------------------
+# 自动化事件日志表
+# ---------------------------------------------------------------------------
+
+
+class EventLog(Base):
+    """
+    自动化事件日志表。
+
+    记录来自控制层的异步事件（如流量异常、蜜罐交互、拓扑变更等）。
+    """
+
+    __tablename__ = "app_event_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    severity: Mapped[str] = mapped_column(String(16), default="info", nullable=False, index=True)
+    payload_snapshot: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    related_resource: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    processed_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False, index=True
+    )
+
+    def __repr__(self) -> str:
+        return f"<EventLog(id={self.id}, type='{self.event_type}', severity='{self.severity}')>"
+
+
+# ---------------------------------------------------------------------------
+# Flow 检测历史记录表
+# ---------------------------------------------------------------------------
+
+
+class FlowDetectionLog(Base):
+    """
+    Flow 检测历史记录表。
+
+    记录模型对 Flow 的每一次推理结果，用于回溯和审计。
+    """
+
+    __tablename__ = "app_flow_detection_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    flow_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    model_version: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    prob: Mapped[float] = mapped_column(Float, nullable=False)
+    label: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    anomaly_score: Mapped[float] = mapped_column(Float, nullable=False)
+    decision_level: Mapped[str] = mapped_column(String(16), nullable=False)
+    feature_snapshot: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    payload_snapshot: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False, index=True
+    )
+
+    def __repr__(self) -> str:
+        return f"<FlowDetectionLog(id={self.id}, flow_id='{self.flow_id}', level='{self.decision_level}')>"

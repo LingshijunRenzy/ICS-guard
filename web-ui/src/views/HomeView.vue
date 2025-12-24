@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
-import { 
-  fetchTopology, 
-  fetchAlerts, 
-  fetchHoneypotLogs, 
-  fetchModelMeta, 
+import {
+  fetchTopology,
+  fetchAlerts,
+  fetchHoneypotLogs,
+  fetchModelMeta,
   fetchUiEvents,
   type TopologyResponse,
   type AlertItem,
@@ -112,7 +112,8 @@ onMounted(() => {
         </div>
         <div class="card-content scrollable-list">
           <div v-if="alerts.length === 0" class="empty-state">NO ACTIVE ALERTS</div>
-          <div v-else v-for="alert in alerts.slice(0, 5)" :key="alert.id" class="list-item alert-item" :class="alert.level">
+          <div v-else v-for="alert in alerts.slice(0, 5)" :key="alert.id" class="list-item alert-item"
+            :class="alert.level">
             <span class="item-time">{{ new Date(alert.created_at).toLocaleTimeString() }}</span>
             <span class="item-level">[{{ alert.level.toUpperCase() }}]</span>
             <span class="item-msg">{{ alert.message }}</span>
@@ -160,7 +161,7 @@ onMounted(() => {
   height: 100%;
   overflow-y: auto;
   background-color: var(--cyber-bg);
-  color: var(--cyber-text);
+  color: var(--cyber-text-main);
   font-family: '0xProto Nerd Font', monospace;
 }
 
@@ -173,8 +174,8 @@ onMounted(() => {
 }
 
 .bento-card {
-  background: rgba(10, 15, 20, 0.7);
-  border: 1px solid var(--cyber-border);
+  background: var(--cyber-card-bg);
+  border: var(--cyber-border-primary);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -183,8 +184,7 @@ onMounted(() => {
 }
 
 .bento-card:hover {
-  border-color: var(--cyber-primary);
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
+  border-color: var(--cyber-secondary);
 }
 
 .stat-card {
@@ -203,34 +203,46 @@ onMounted(() => {
   color: var(--cyber-secondary);
   letter-spacing: 2px;
   margin-bottom: 10px;
+  font-weight: bold;
 }
 
 .stat-value {
   font-size: 3rem;
   font-weight: bold;
-  color: #fff;
+  color: var(--cyber-text-main);
   line-height: 1.2;
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
-.status-text.normal { color: var(--cyber-success); }
-.status-text.warning { color: var(--cyber-warning); }
-.status-text.initializing { color: var(--cyber-secondary); }
+.status-text.normal {
+  color: var(--cyber-success);
+}
+
+.status-text.warning {
+  color: var(--cyber-warning);
+}
+
+.status-text.initializing {
+  color: var(--cyber-secondary);
+}
 
 .text-danger {
   color: var(--cyber-danger);
-  text-shadow: 0 0 10px rgba(255, 0, 60, 0.5);
-  animation: pulse 2s infinite;
+  font-weight: bold;
 }
 
 .stat-sub {
   font-size: 0.8rem;
-  color: var(--cyber-text-dim);
+  color: var(--cyber-text-sub);
   margin-top: 5px;
 }
 
-.span-2 { grid-column: span 2; }
-.span-4 { grid-column: span 4; }
+.span-2 {
+  grid-column: span 2;
+}
+
+.span-4 {
+  grid-column: span 4;
+}
 
 .wide-card {
   height: 300px;
@@ -242,21 +254,21 @@ onMounted(() => {
 
 .card-header {
   padding: 15px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: var(--cyber-border-primary);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--cyber-table-header-bg);
 }
 
 .header-title {
   font-weight: bold;
-  color: var(--cyber-primary);
+  color: var(--cyber-text-main);
 }
 
 .header-decoration {
   font-size: 0.8rem;
-  color: var(--cyber-text-dim);
+  color: var(--cyber-text-sub);
 }
 
 .card-content {
@@ -273,19 +285,27 @@ onMounted(() => {
   display: flex;
   align-items: center;
   padding: 8px 0;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+  border-bottom: 1px dashed var(--cyber-border-color);
   font-size: 0.9rem;
 }
 
 .item-time {
-  color: var(--cyber-text-dim);
+  color: var(--cyber-text-sub);
   margin-right: 15px;
   font-size: 0.8rem;
 }
 
-.alert-item.critical .item-level { color: var(--cyber-danger); }
-.alert-item.high .item-level { color: var(--cyber-warning); }
-.alert-item.info .item-level { color: var(--cyber-primary); }
+.alert-item.critical .item-level {
+  color: var(--cyber-danger);
+}
+
+.alert-item.high .item-level {
+  color: var(--cyber-warning);
+}
+
+.alert-item.info .item-level {
+  color: var(--cyber-primary);
+}
 
 .item-level {
   width: 80px;
@@ -293,7 +313,7 @@ onMounted(() => {
 }
 
 .item-msg {
-  color: #fff;
+  color: var(--cyber-text-main);
 }
 
 .honey-item {
@@ -302,7 +322,7 @@ onMounted(() => {
 
 .item-arrow {
   margin: 0 10px;
-  color: var(--cyber-text-dim);
+  color: var(--cyber-text-sub);
 }
 
 .events-grid {
@@ -312,22 +332,22 @@ onMounted(() => {
 }
 
 .event-pill {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--cyber-row-hover);
   padding: 10px;
-  border-left: 2px solid var(--cyber-primary);
+  border-left: 2px solid var(--cyber-secondary);
   display: flex;
   flex-direction: column;
 }
 
 .event-type {
-  color: var(--cyber-primary);
+  color: var(--cyber-text-main);
   font-weight: bold;
   font-size: 0.9rem;
 }
 
 .event-data {
   font-size: 0.8rem;
-  color: var(--cyber-text-dim);
+  color: var(--cyber-text-sub);
   margin-top: 5px;
   white-space: nowrap;
   overflow: hidden;
@@ -340,26 +360,41 @@ onMounted(() => {
   right: 0;
   width: 20px;
   height: 20px;
-  border-top: 2px solid var(--cyber-primary);
-  border-right: 2px solid var(--cyber-primary);
+  border-top: 2px solid var(--cyber-secondary);
+  border-right: 2px solid var(--cyber-secondary);
 }
 
 @keyframes pulse {
-  0% { opacity: 1; }
-  50% { opacity: 0.5; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+
+  100% {
+    opacity: 1;
+  }
 }
 
-.highlight-green { color: var(--cyber-success); }
-.highlight-red { color: var(--cyber-danger); }
+.highlight-green {
+  color: var(--cyber-success);
+}
+
+.highlight-red {
+  color: var(--cyber-danger);
+}
 
 ::-webkit-scrollbar {
   width: 6px;
 }
+
 ::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.05);
 }
+
 ::-webkit-scrollbar-thumb {
-  background: var(--cyber-border);
+  background: var(--cyber-border-color);
 }
 </style>

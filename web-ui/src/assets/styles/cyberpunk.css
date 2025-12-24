@@ -23,7 +23,7 @@
   --cyber-glow-white: 0 0 4px rgba(255, 255, 255, 0.5);
 
   /* 组件背景 */
-    --cyber-card-bg: rgba(0, 0, 0, 0.6);
+  --cyber-card-bg: rgba(0, 0, 0, 0.6);
     --cyber-input-bg: rgba(0, 0, 0, 0.8);
     --cyber-table-header-bg: rgba(255, 255, 255, 0.1);
     --cyber-table-border: rgba(255, 255, 255, 0.3);
@@ -33,44 +33,62 @@
     --cyber-btn-hover-bg: #FFFFFF;
     --cyber-btn-hover-text: #000000;
     --cyber-scanline: rgba(255, 255, 255, 0.03);
-  
+  --cyber-dot-color: rgba(255, 255, 255, 0.5);
+    --cyber-dot-bg: #000000;
+    --cyber-topo-active: #2DFEFF;
+    /* 布局背景 */
+    --cyber-header-bg: rgba(10, 15, 20, 0.8);
+    --cyber-aside-bg: rgba(10, 14, 23, 0.8);
+    --cyber-aside-border: rgba(45, 254, 255, 0.2);
+    --cyber-main-bg: transparent;
     /* 字体 */
   --cyber-font-title: '0xProto Nerd Font', monospace;
   --cyber-font-body: '0xProto Nerd Font', monospace;
 }
 
 [data-theme='light'] {
-  /* 核心色板 - 亮色模式 */
-  --cyber-bg: #F0F2F5;
-  --cyber-primary: #1A1A1A;
-  --cyber-secondary: #00A3A3;
-  --cyber-accent: #B020C0;
-  --cyber-text-main: #1A1A1A;
-  --cyber-text-sub: #5E5E5E;
-  --cyber-mask: rgba(255, 255, 255, 0.85);
+    /* 背景：工业灰白，模拟塑料材质 */
+      --cyber-bg: #EBEBEB;
+      /* 主色：深邃黑 (用于文字、边框、重要结构) */
+      --cyber-primary: #121212;
+      /* 辅助色：罗德岛蓝 (交互高亮，高饱和度) */
+      --cyber-secondary: #0095FF;
+      /* 强调色：警示橙 (重要信息，高对比) */
+      --cyber-accent: #FF5D00;
+      --cyber-text-main: #121212;
+      --cyber-text-sub: #595959;
+      --cyber-mask: rgba(255, 255, 255, 0.9);
 
-  /* 辅助色 - 亮色微调 */
-  --cyber-success: #008F58;
-  --cyber-warning: #B88600;
-  --cyber-danger: #D00040;
-
-  /* 边框与发光 */
-  --cyber-border-color: #1A1A1A;
+  /* 状态色 - 低饱和度机能风 */
+    --cyber-success: #6CC446;
+    --cyber-warning: #FFB000;
+    --cyber-danger: #FF3333;
+    /* 边框 - 强对比黑，无发光 */
+    --cyber-border-color: #121212;
   --cyber-border-primary: 1px solid var(--cyber-border-color);
   --cyber-border-accent: 1px solid var(--cyber-accent);
-  --cyber-glow-white: 0 0 4px rgba(0, 0, 0, 0.1);
-
-  /* 组件背景 */
-  --cyber-card-bg: rgba(255, 255, 255, 0.9);
-  --cyber-input-bg: #FFFFFF;
-  --cyber-table-header-bg: rgba(0, 0, 0, 0.05);
-  --cyber-table-border: rgba(0, 0, 0, 0.1);
-  --cyber-row-hover: rgba(0, 0, 0, 0.02);
+  --cyber-glow-white: none;
+    /* 组件背景 - 透明塑料质感 */
+    --cyber-card-bg: rgba(255, 255, 255, 0.85);
+    --cyber-input-bg: rgba(255, 255, 255, 0.6);
+    --cyber-table-header-bg: rgba(18, 18, 18, 0.05);
+    --cyber-table-border: rgba(18, 18, 18, 0.15);
+    --cyber-row-hover: rgba(0, 149, 255, 0.08);
+    /* 按钮 - 黑白反转，强调物理按键感 */
   --cyber-btn-bg: #FFFFFF;
-  --cyber-btn-text: #1A1A1A;
-  --cyber-btn-hover-bg: #1A1A1A;
+  --cyber-btn-text: #121212;
+    --cyber-btn-hover-bg: #121212;
   --cyber-btn-hover-text: #FFFFFF;
+  
   --cyber-scanline: rgba(0, 0, 0, 0.02);
+  --cyber-dot-color: rgba(245, 245, 245, 0.75);
+    --cyber-dot-bg: #8e8e8e;
+    --cyber-topo-active: #007ACC;
+    /* 布局背景 - 层次分明 */
+    --cyber-header-bg: rgba(255, 255, 255, 0.95);
+    --cyber-aside-bg: #F2F2F2;
+    --cyber-aside-border: #D9D9D9;
+    --cyber-main-bg: #EBEBEB;
 }
 /* ---- 全局基础重置 ---- */
 body {
@@ -197,8 +215,10 @@ body {
 
 .el-menu-item.is-active {
   color: var(--cyber-text-main) !important;
-    background: var(--cyber-table-header-bg) !important;
-    border-left: 2px solid var(--cyber-border-color);
+  background: var(--cyber-table-header-bg) !important;
+  border-left: 4px solid var(--cyber-border-color);
+    /* 加粗左侧指示条，模拟黑色长条元素 */
+    font-weight: bold;
 }
 
 /* 输入框 */
@@ -296,13 +316,31 @@ body {
 }
 
 .cli-code-block {
-  background: #1a1a1a;
+  background: var(--cyber-input-bg);
   padding: 15px;
   border-radius: 0;
-  border: 1px solid #333;
-  color: #00ff00;
+  border: 1px solid var(--cyber-table-border);
+    color: var(--cyber-secondary);
   font-family: 'Courier New', Courier, monospace;
   font-size: 13px;
   line-height: 1.5;
   overflow-x: auto;
+}
+/* ---- 对话框样式 ---- */
+.el-dialog {
+  background-color: var(--cyber-card-bg) !important;
+  border: 1px solid var(--cyber-border-color) !important;
+  border-radius: 0 !important;
+  backdrop-filter: blur(10px);
+}
+
+.el-dialog__title {
+  color: var(--cyber-text-main) !important;
+  font-family: var(--cyber-font-title);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.el-dialog__body {
+  color: var(--cyber-text-main) !important;
 }

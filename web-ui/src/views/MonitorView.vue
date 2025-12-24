@@ -350,28 +350,28 @@ onBeforeUnmount(() => {
 }
 
 :deep(.el-table td.el-table__cell) {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--cyber-table-border);
 }
 
 /* 斑马纹样式 */
 :deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
-  background-color: rgba(255, 255, 255, 0.05);
+  background-color: var(--cyber-table-header-bg);
 }
 
 /* Hover 样式 */
 :deep(.el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell) {
-  background-color: rgba(0, 240, 255, 0.1);
+  background-color: var(--cyber-row-hover);
 }
 
 /* Card 样式适配 */
 :deep(.el-card) {
-  background-color: rgba(0, 20, 40, 0.6);
-  border: 1px solid rgba(0, 240, 255, 0.3);
-  color: var(--cyber-text);
+  background-color: var(--cyber-card-bg);
+  border: var(--cyber-border-primary);
+  color: var(--cyber-text-main);
 }
 
 :deep(.el-card__header) {
-  border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+  border-bottom: var(--cyber-border-primary);
 }
 .monitor-layout {
   display: flex;
@@ -389,7 +389,7 @@ onBeforeUnmount(() => {
 .flow-id {
   font-family: '0xProto Nerd Font', monospace;
   font-size: 12px;
-  color: var(--cyber-text);
+  color: var(--cyber-text-main);
 }
 
 .mono {

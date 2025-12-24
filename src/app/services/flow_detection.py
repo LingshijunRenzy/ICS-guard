@@ -11,6 +11,7 @@ Flow 检测流水线。
 
 from __future__ import annotations
 
+import json
 import logging
 import queue
 import threading
@@ -18,10 +19,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from .event_subscriber import Event, EventType
+from .event_subscriber import Event, EventType, record_event_for_ui
 from .inference import DecisionLevel, get_inference_service
 from ..db import session_scope
-from ..db.models import AppFlow
+from ..db.models import AppFlow, FlowDetectionLog
 from .ui_events_ws import enqueue_ui_event
 
 logger = logging.getLogger(__name__)
@@ -252,6 +253,7 @@ def _update_flows_detection(
 ) -> None:
     """
     根据推理结果更新 app_flows，并通过 UI WS 推送状态更新事件。
+    同时记录检测历史到 FlowDetectionLog。
     """
     now = datetime.now(timezone.utc).isoformat()
 
@@ -263,6 +265,7 @@ def _update_flows_detection(
                 if row is None:
                     continue
 
+                label = "Unknown"
                 if error is not None or results is None or idx >= len(results):
                     row.detect_status = "error"
                     row.decision_level = "normal"
@@ -272,11 +275,13 @@ def _update_flows_detection(
                     status = "error"
                     prob = 0.0
                     decision_level = "normal"
+                    label = "Error"
                 else:
                     r = results[idx]
                     status = _map_decision_to_status(r.decision_level)
                     prob = float(r.prob)
                     decision_level = r.decision_level.value
+                    label = r.label
 
                     row.detect_status = status
                     row.decision_level = decision_level
@@ -284,8 +289,23 @@ def _update_flows_detection(
                     row.anomaly_score = float(r.anomaly_score)
                     row.detected_at = datetime.now(timezone.utc)
 
+                # 记录检测历史
+                try:
+                    det_log = FlowDetectionLog(
+                        flow_id=flow_id,
+                        prob=prob,
+                        label=label,
+                        anomaly_score=row.anomaly_score,
+                        decision_level=decision_level,
+                        payload_snapshot=json.dumps(task.flow, ensure_ascii=False)
+                    )
+                    session.add(det_log)
+                except Exception as e:
+                    logger.error("Failed to record flow detection log: %s", e)
+
                 # 推送 UI 事件
                 try:
+                    # 1. 实时推送 (WebSocket)
                     enqueue_ui_event(
                         {
                             "type": "flow_detection_update",
@@ -298,8 +318,22 @@ def _update_flows_detection(
                             },
                         }
                     )
+                    # 2. 记录到自动化事件日志 (EventLog)
+                    # 构造一个内部事件并记录
+                    det_event = Event(
+                        event_type=EventType.FLOW_DETECTION,
+                        timestamp=now,
+                        data={
+                            "flow_id": flow_id,
+                            "detect_status": status,
+                            "label": label,
+                            "prob": prob,
+                            "decision_level": decision_level,
+                        }
+                    )
+                    record_event_for_ui(det_event)
                 except Exception as e:
-                    logger.debug("enqueue_ui_event(flow_detection_update) failed: %s", e)
+                    logger.debug("Failed to push/record flow detection event: %s", e)
     except Exception as e:
         logger.error("Failed to update flow detection results: %s", e, exc_info=True)
 

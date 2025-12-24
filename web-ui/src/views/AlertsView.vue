@@ -36,18 +36,18 @@ onMounted(async () => {
 /* 覆盖 Element Plus 表格样式，适配暗色主题 */
 :deep(.el-table) {
   background-color: transparent;
-  color: var(--cyber-text);
-  --el-table-header-bg-color: rgba(0, 0, 0, 0.3);
-  --el-table-border-color: rgba(255, 255, 255, 0.1);
+  color: var(--cyber-text-main);
+  --el-table-header-bg-color: var(--cyber-table-header-bg);
+  --el-table-border-color: var(--cyber-table-border);
   --el-table-tr-bg-color: transparent;
 }
 
 :deep(.el-table__inner-wrapper::before) {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--cyber-table-border);
 }
 
 :deep(.el-table th.el-table__cell) {
-  background-color: rgba(0, 0, 0, 0.3);
+  background-color: var(--cyber-table-header-bg);
   color: var(--cyber-primary);
   font-weight: bold;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);

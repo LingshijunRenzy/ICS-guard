@@ -20,6 +20,7 @@ const menus = [
   { path: '/model', label: '模型与系统', name: 'model' },
   { path: '/users', label: '用户管理', name: 'users' },
   { path: '/audit', label: '审计日志', name: 'audit' },
+  { path: '/automation-logs', label: '自动化日志', name: 'automation-logs' },
 ] as const
 
 const menuPermissions: Record<string, string[] | undefined> = {
@@ -32,6 +33,7 @@ const menuPermissions: Record<string, string[] | undefined> = {
   '/model': ['model:read'],
   '/users': ['user:manage'],
   '/audit': ['audit:read'],
+  '/automation-logs': ['event_log:read'],
 }
 
 const visibleMenus = computed(() => {
@@ -74,8 +76,9 @@ function handleLogout() {
     <template v-if="!isFullScreenPage">
       <header class="layout-header scanline">
         <div class="layout-header-left">
-          <div class="layout-header-logo cyber-glow">ICS-GUARD // SYSTEM</div>
-          <div class="layout-header-title">>> {{ route.meta.title ? route.meta.title.toUpperCase() : 'CONSOLE' }}</div>
+          <div class="layout-header-logo">ICS-GUARD // SYSTEM</div>
+          <div class="layout-header-title">>> {{ route.meta.title ? String(route.meta.title).toUpperCase() : 'CONSOLE'
+            }}</div>
         </div>
         <div class="layout-header-right">
           <div class="header-status">SYSTEM STATUS: <span style="color: var(--cyber-success)">NORMAL</span></div>
@@ -133,11 +136,11 @@ function handleLogout() {
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  border-bottom: 1px solid var(--cyber-primary);
-  background: rgba(10, 14, 23, 0.9);
+  border-bottom: 1px solid var(--cyber-border-color);
+    background: var(--cyber-header-bg);
   position: relative;
   z-index: 100;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
 .layout-header-left {
@@ -149,10 +152,12 @@ function handleLogout() {
 .layout-header-logo {
   font-family: 'Orbitron', sans-serif;
   font-weight: 700;
-  font-size: 24px;
-  color: var(--cyber-primary);
+  font-size: 20px;
+    color: var(--cyber-btn-hover-text);
+    background-color: var(--cyber-primary);
+    padding: 2px 10px;
   letter-spacing: 2px;
-  text-shadow: 0 0 10px rgba(45, 254, 255, 0.5);
+  text-shadow: none;
 }
 
 .layout-header-title {
@@ -199,8 +204,8 @@ function handleLogout() {
 }
 
 .layout-aside {
-  background: rgba(10, 14, 23, 0.8);
-  border-right: 1px solid rgba(45, 254, 255, 0.2);
+  background: var(--cyber-aside-bg);
+    border-right: 1px solid var(--cyber-aside-border);
   display: flex;
   flex-direction: column;
   backdrop-filter: blur(4px);
@@ -222,23 +227,23 @@ function handleLogout() {
 
 .aside-footer {
   padding: 16px;
-  border-top: 1px solid rgba(45, 254, 255, 0.1);
+  border-top: 1px solid var(--cyber-aside-border);
 }
 
 .sys-info {
   font-family: 'Rajdhani', sans-serif;
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--cyber-text-sub);
   text-align: center;
 }
 
 .layout-main {
   padding: 20px;
-  background: transparent;
+  background: var(--cyber-main-bg);
   overflow-y: auto;
   /* 滚动条样式 */
   scrollbar-width: thin;
-  scrollbar-color: var(--cyber-primary) rgba(0, 0, 0, 0.3);
+  scrollbar-color: var(--cyber-primary) var(--cyber-table-border);
 }
 
 .layout-main::-webkit-scrollbar {
@@ -246,7 +251,7 @@ function handleLogout() {
 }
 
 .layout-main::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--cyber-table-border);
 }
 
 .layout-main::-webkit-scrollbar-thumb {

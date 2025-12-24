@@ -1383,7 +1383,7 @@ onUnmounted(() => {
     <div v-if="selectedNode" class="node-detail-panel">
       <div class="panel-header">
         <span class="panel-title">>> NODE DETAIL</span>
-        <el-button text @click="selectNode(null)" class="close-btn" style="color: #fff; padding: 0; min-height: auto;">
+        <el-button text @click="selectNode(null)" class="close-btn" style="padding: 0; min-height: auto;">
           ×
         </el-button>
       </div>
@@ -1449,7 +1449,7 @@ onUnmounted(() => {
     <div v-if="selectedLink" class="node-detail-panel">
       <div class="panel-header">
         <span class="panel-title">>> LINK DETAIL</span>
-        <el-button text @click="selectLink(null)" class="close-btn" style="color: #fff; padding: 0; min-height: auto;">
+        <el-button text @click="selectLink(null)" class="close-btn" style="padding: 0; min-height: auto;">
           ×
         </el-button>
       </div>
@@ -1541,8 +1541,8 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(0, 0, 0, 0.6);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--cyber-header-bg);
+  border-bottom: var(--cyber-border-primary);
   z-index: 10;
 }
 
@@ -1550,7 +1550,9 @@ onUnmounted(() => {
   flex: 1;
   width: 100%;
   position: relative;
-  background: radial-gradient(circle at center, rgba(45, 254, 255, 0.05) 0%, transparent 70%);
+  background-color: var(--cyber-dot-bg);
+  background-image: radial-gradient(var(--cyber-dot-color) 1px, transparent 1px);
+  background-size: 20px 20px;
   overflow: hidden;
 }
 
@@ -1558,13 +1560,14 @@ onUnmounted(() => {
   position: fixed;
   z-index: 9999;
   pointer-events: none;
-  background: rgba(10, 14, 23, 0.95);
-  border: 1px solid #FFFFFF;
+  background: var(--cyber-card-bg);
+  border: var(--cyber-border-primary);
   padding: 12px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
   font-family: '0xProto Nerd Font', monospace;
   min-width: 200px;
   transform: translate(10px, 10px);
+  backdrop-filter: blur(4px);
 }
 
 :deep(.cyber-tooltip-content .header) {
@@ -1573,10 +1576,11 @@ onUnmounted(() => {
   align-items: center;
   margin-bottom: 8px;
   padding-bottom: 4px;
+  border-bottom: var(--cyber-border-primary);
 }
 
 :deep(.cyber-tooltip-content .title) {
-  color: #fff;
+  color: var(--cyber-text-main);
   font-weight: bold;
   font-size: 14px;
 }
@@ -1591,11 +1595,11 @@ onUnmounted(() => {
   justify-content: space-between;
   margin-bottom: 4px;
   font-size: 12px;
-  color: #ccc;
+  color: var(--cyber-text-sub);
 }
 
 :deep(.cyber-tooltip-content .value.active) {
-  color: #2DFEFF;
+  color: var(--cyber-secondary);
 }
 
 :deep(.cyber-tooltip-content .status-tag) {
@@ -1618,9 +1622,9 @@ onUnmounted(() => {
   top: 80px;
   bottom: 20px;
   width: 320px;
-  background: rgba(10, 14, 23, 0.95);
-  border: 1px solid #FFFFFF;
-  box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+  background: var(--cyber-card-bg);
+  border: var(--cyber-border-primary);
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -1630,15 +1634,15 @@ onUnmounted(() => {
 
 .panel-header {
   padding: 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: var(--cyber-border-primary);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--cyber-table-header-bg);
 }
 
 .panel-title {
-  color: #FFFFFF;
+  color: var(--cyber-text-main);
   font-size: 14px;
   font-weight: bold;
   letter-spacing: 1px;
@@ -1649,6 +1653,7 @@ onUnmounted(() => {
   line-height: 1;
   cursor: pointer;
   transition: color 0.2s;
+  color: var(--cyber-text-main);
 }
 
 .close-btn:hover {
@@ -1666,12 +1671,12 @@ onUnmounted(() => {
 }
 
 .section-title {
-  color: #CCCCCC;
+  color: var(--cyber-text-sub);
   font-size: 11px;
   font-weight: bold;
   margin-bottom: 12px;
   letter-spacing: 1px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: var(--cyber-border-primary);
   padding-bottom: 6px;
 }
 
@@ -1684,13 +1689,13 @@ onUnmounted(() => {
 }
 
 .detail-label {
-  color: #CCCCCC;
+  color: var(--cyber-text-sub);
   font-weight: bold;
   min-width: 100px;
 }
 
 .detail-value {
-  color: #FFFFFF;
+  color: var(--cyber-text-main);
   text-align: right;
   flex: 1;
 }
@@ -1698,12 +1703,12 @@ onUnmounted(() => {
 .detail-value.code {
   font-family: '0xProto Nerd Font', monospace;
   font-size: 10px;
-  color: #2DFEFF;
+  color: var(--cyber-topo-active);
   word-break: break-all;
 }
 
 .detail-value.active {
-  color: #2DFEFF;
+  color: var(--cyber-topo-active);
 }
 
 .detail-value.type-tag,
@@ -1725,13 +1730,13 @@ onUnmounted(() => {
   align-items: center;
   padding: 8px;
   margin-bottom: 6px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--cyber-table-header-bg);
+  border: var(--cyber-border-primary);
   font-size: 11px;
 }
 
 .connected-name {
-  color: #FFFFFF;
+  color: var(--cyber-text-main);
   flex: 1;
 }
 
@@ -1742,8 +1747,8 @@ onUnmounted(() => {
 }
 
 .connected-status.online {
-  color: #FFFFFF;
-  border-color: #FFFFFF;
+  color: var(--cyber-text-main);
+  border-color: var(--cyber-border-color);
 }
 
 .connected-status.offline {

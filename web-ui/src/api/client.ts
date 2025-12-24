@@ -379,6 +379,33 @@ export async function fetchUiEvents(params?: { limit?: number; types?: string })
   return res.data
 }
 
+export interface EventLogItem {
+  id: number
+  type: string
+  source: string
+  severity: string
+  payload: string | null
+  resource: string | null
+  processed_by: string | null
+  timestamp: string
+}
+
+export async function fetchEventLogs(params: {
+  page?: number
+  per_page?: number
+  type?: string
+  severity?: string
+  resource?: string
+}) {
+  const res = await apiClient.get<{
+    total: number
+    page: number
+    per_page: number
+    items: EventLogItem[]
+  }>('/events/logs', { params })
+  return res.data
+}
+
 export async function fetchCurrentUser() {
   const res = await apiClient.get<CurrentUserProfile>('/auth/me')
   return res.data
