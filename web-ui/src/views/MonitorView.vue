@@ -116,6 +116,9 @@ function getEventTypeColor(type: string) {
 }
 
 function appendEvent(e: UiEventItem) {
+  // 忽略高频指标更新事件，避免淹没重要告警
+  if (e.type === 'node_metrics_update') return
+
   events.push(e)
   if (events.length > 200) {
     events.splice(0, events.length - 200)

@@ -15,7 +15,20 @@
 属性：
 - `id`: string, 节点唯一标识符
 - `name`: string, 节点名称
-- `type`: string, 节点类型 (例如: switch, plc, honeypot)
+- `type`: string, 节点类型，支持以下值：
+  - `'plc'`: 可编程逻辑控制器
+  - `'hmi'`: 人机界面
+  - `'switch'`: 交换机
+  - `'router'`: 路由器
+  - `'sensor'`: 传感器
+  - `'actuator'`: 执行器
+  - `'firewall'`: 防火墙
+  - `'server'`: 服务器
+  - `'honeypot'`: 蜜罐
+  - `'node'`: 通用节点
+  - `'connection'`: 连接
+  - `'flow'`: 流量
+  - `'access'`: 访问控制
 - `ip`: string, 节点IP地址
 - `status`: string, 节点状态 (例如: online, offline, maintenance)
 
@@ -966,6 +979,25 @@ API使用标准HTTP状态码来指示请求的成功或失败。在出现错误�
           {"node_id": "fw1", "ip": "10.0.0.254"},
           {"node_id": "plc1", "ip": "10.0.0.10"}
         ]
+      }
+    }
+  }
+  ```
+
+### 6. 节点指标更新
+- **连接端点**: `/ws/node-metrics`
+- **描述**: 实时推送节点的性能指标数据（高频），用于详情面板或实时图表展示。
+- **消息格式**:
+  ```json
+  {
+    "event": "node_metrics_update",
+    "timestamp": "string",
+    "data": {
+      "node_id": "string",
+      "metrics": {
+        "cpu_usage": "number",
+        "memory_usage": "number",
+        "network_throughput": "number"
       }
     }
   }

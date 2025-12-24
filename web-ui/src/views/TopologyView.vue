@@ -843,6 +843,36 @@ const connectWebSocket = () => {
         const eventType = data.type.toLowerCase()
         const eventData = data.data
 
+        // 处理节点状态更新
+        if (eventType === 'network_status_update') {
+          const nodeId = eventData.node_id
+          const status = eventData.status
+          const nodeObj = nodeObjects.get(nodeId)
+          if (nodeObj) {
+            nodeObj.data.status = status
+            // 如果当前选中了该节点，更新详情面板
+            if (selectedNode.value && selectedNode.value.id === nodeId) {
+              selectedNode.value = { ...nodeObj.data }
+            }
+            // 更新 3D 场景中的节点颜色（如果有状态颜色映射）
+            // updateNodeVisuals(nodeObj) // 假设有这个函数，或者直接修改 mesh
+          }
+        }
+
+        // 处理节点指标更新
+        if (eventType === 'node_metrics_update') {
+          const nodeId = eventData.node_id
+          const metrics = eventData.metrics
+          const nodeObj = nodeObjects.get(nodeId)
+          if (nodeObj) {
+            nodeObj.data.metrics = metrics
+            // 如果当前选中了该节点，更新详情面板
+            if (selectedNode.value && selectedNode.value.id === nodeId) {
+              selectedNode.value = { ...nodeObj.data }
+            }
+          }
+        }
+
         if (eventType.includes('flow') || eventType.includes('traffic') || eventType.includes('packet')) {
           let sourceId = eventData.source || eventData.src || eventData.from
           let targetId = eventData.target || eventData.dst || eventData.to
@@ -1206,6 +1236,12 @@ const selectLink = (link: LinkObject | null) => {
   }
 }
 
+const getMetricColor = (val: number) => {
+  if (val > 80) return '#FF2A6D'
+  if (val > 50) return '#FFA500'
+  return '#00FF9C'
+}
+
 const selectNode = (node: TopologyNode | null) => {
   selectedNode.value = node
 
@@ -1423,6 +1459,33 @@ onUnmounted(() => {
           <div class="detail-row">
             <span class="detail-label">CONNECTIONS:</span>
             <span class="detail-value">{{ nodeObjects.get(selectedNode.id)?.degree || 0 }}</span>
+          </div>
+        </div>
+
+        <div v-if="selectedNode.metrics" class="detail-section">
+          <div class="section-title">REALTIME METRICS</div>
+          <div class="detail-row">
+            <span class="detail-label">CPU:</span>
+            <div class="metric-bar-container">
+              <div class="metric-bar"
+                :style="{ width: (selectedNode.metrics.cpu_usage || 0) + '%', backgroundColor: getMetricColor(selectedNode.metrics.cpu_usage || 0) }">
+              </div>
+              <span class="metric-text">{{ (selectedNode.metrics.cpu_usage || 0).toFixed(1) }}%</span>
+            </div>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">MEM:</span>
+            <div class="metric-bar-container">
+              <div class="metric-bar"
+                :style="{ width: (selectedNode.metrics.memory_usage || 0) + '%', backgroundColor: getMetricColor(selectedNode.metrics.memory_usage || 0) }">
+              </div>
+              <span class="metric-text">{{ (selectedNode.metrics.memory_usage || 0).toFixed(1) }}%</span>
+            </div>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">NET:</span>
+            <span class="detail-value active">{{ (selectedNode.metrics.network_throughput || 0).toFixed(2) }}
+              Mbps</span>
           </div>
         </div>
 
@@ -1720,6 +1783,29 @@ onUnmounted(() => {
   font-weight: bold;
 }
 
+.metric-bar-container {
+  flex: 1;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  position: relative;
+  margin-left: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.metric-bar {
+  height: 100%;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.metric-text {
+  position: absolute;
+  right: 4px;
+  top: -2px;
+  font-size: 9px;
+  color: #fff;
+  text-shadow: 1px 1px 2px #000;
+  font-weight: bold;
+}
 .connected-list {
   max-height: 300px;
   overflow-y: auto;

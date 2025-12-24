@@ -45,6 +45,20 @@ export interface TopologyNode {
   type: string
   ip?: string
   status?: string
+  metrics?: {
+    cpu_usage?: number
+    memory_usage?: number
+    network_throughput?: number
+  }
+}
+
+export interface NodeMetricsUpdate {
+  node_id: string
+  metrics: {
+    cpu_usage?: number
+    memory_usage?: number
+    network_throughput?: number
+  }
 }
 
 export interface TopologyLink {
