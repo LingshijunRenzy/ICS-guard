@@ -205,6 +205,11 @@ class ForwardingEngine:
         else:
             mod = parser.OFPFlowMod(datapath=datapath, priority=priority,
                                     match=match, instructions=inst, idle_timeout=idle_timeout, hard_timeout=hard_timeout)
+        
+        # Log flow installation for debugging
+        if priority > 0: # Don't log table-miss flows
+            self.logger.info("Installing flow on dpid %s: match=%s", datapath.id, match)
+
         datapath.send_msg(mod)
 
     def clear_flows(self, datapath):

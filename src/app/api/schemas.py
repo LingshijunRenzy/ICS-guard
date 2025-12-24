@@ -5,6 +5,7 @@ class Node(TypedDict):
     id: str
     name: str
     type: str
+    zone: str
     ip: str
     status: str
 

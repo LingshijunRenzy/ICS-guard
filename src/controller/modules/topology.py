@@ -3,11 +3,20 @@ import networkx as nx
 from ryu.lib import hub
 from ryu.topology.api import get_switch, get_link
 import time
+import sys
+import os
+
+# Add parent directory to path to import node_config
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from node_config import HOSTS, SWITCHES
 
 class NodeInfo:
     def __init__(self, node_id, node_type, **kwargs):
         self.id = node_id
-        self.type = node_type # 'switch' or 'host'
+        self.type = node_type # 'switch', 'plc', 'hmi', etc.
+        self.name = kwargs.get('name', str(node_id))
+        self.zone = kwargs.get('zone', 'Unknown') # Network Zone
+        self.status = kwargs.get('status', 'online')
         self.ip = kwargs.get('ip')
         self.mac = kwargs.get('mac')
         self.dpid = kwargs.get('dpid') # For hosts, connected switch
@@ -18,14 +27,18 @@ class NodeInfo:
 
     def to_dict(self):
         return {
-            'id': self.id,
+            'id': str(self.id),
+            'name': self.name,
             'type': self.type,
+            'zone': self.zone,
+            'status': self.status,
             'ip': self.ip,
             'mac': self.mac,
-            'dpid': self.dpid,
+            'dpid': str(self.dpid) if self.dpid else None,
             'port': self.port,
             'first_seen': self.first_seen,
-            'last_seen': self.last_seen
+            'last_seen': self.last_seen,
+            'metrics': self.metrics
         }
 
 class TopologyManager:
@@ -52,10 +65,27 @@ class TopologyManager:
         """Manually add a switch to the topology"""
         if dpid not in self.switches:
             self.switches.append(dpid)
-            self.nodes[dpid] = NodeInfo(dpid, 'switch')
+            
+            # Lookup name from config
+            dpid_str = "{:016x}".format(dpid)
+            config = SWITCHES.get(dpid_str, {})
+            if isinstance(config, str):
+                name = config
+                zone = 'Unknown'
+            else:
+                name = config.get('name', f"s{dpid}")
+                zone = config.get('zone', 'Unknown')
+            
+            self.nodes[dpid] = NodeInfo(dpid, 'switch', name=name, zone=zone, status='online')
             self.net.add_node(dpid)
             self._mst_dirty = True
-            self.logger.info("Switch %s added to topology", dpid)
+            self.logger.info("Switch %s (%s) added to topology", dpid, name)
+            
+            # Push network status update
+            self.notification.push_network_status({
+                'node_id': str(dpid),
+                'status': 'online'
+            })
 
     def remove_switch(self, dpid):
         """Manually remove a switch from the topology"""
@@ -68,6 +98,12 @@ class TopologyManager:
             self._mst_dirty = True
             self.logger.info("Switch %s removed from topology", dpid)
             
+            # Push network status update
+            self.notification.push_network_status({
+                'node_id': str(dpid),
+                'status': 'offline'
+            })
+            
             # Cleanup hosts attached to this switch
             hosts_to_remove = []
             for mac, (host_dpid, port) in self.host_location.items():
@@ -78,7 +114,8 @@ class TopologyManager:
                 self.unregister_host(mac)
 
     def start_discovery(self):
-        hub.spawn(self._discover_topology)
+        # hub.spawn(self._discover_topology)
+        pass
 
     def _discover_topology(self):
         """Periodically discover topology"""
@@ -93,7 +130,17 @@ class TopologyManager:
             for dpid in current_switches:
                 if dpid not in self.switches:
                     self.switches.append(dpid)
-                    self.nodes[dpid] = NodeInfo(dpid, 'switch')
+                    
+                    dpid_str = "{:016x}".format(dpid)
+                    config = SWITCHES.get(dpid_str, {})
+                    if isinstance(config, str):
+                        name = config
+                        zone = 'Unknown'
+                    else:
+                        name = config.get('name', f"s{dpid}")
+                        zone = config.get('zone', 'Unknown')
+                    
+                    self.nodes[dpid] = NodeInfo(dpid, 'switch', name=name, zone=zone, status='online')
                     self.net.add_node(dpid)
                     self._mst_dirty = True
             
@@ -167,10 +214,25 @@ class TopologyManager:
     def handle_switch_enter(self, dpid):
         if dpid not in self.switches:
             self.switches.append(dpid)
-            self.nodes[dpid] = NodeInfo(dpid, 'switch')
+            
+            dpid_str = "{:016x}".format(dpid)
+            config = SWITCHES.get(dpid_str, {})
+            if isinstance(config, str):
+                name = config
+                zone = 'Unknown'
+            else:
+                name = config.get('name', f"s{dpid}")
+                zone = config.get('zone', 'Unknown')
+            
+            self.nodes[dpid] = NodeInfo(dpid, 'switch', name=name, zone=zone, status='online')
             self.net.add_node(dpid)
             self._mst_dirty = True
-            self.notification.push_topology_change('switch_added', {'dpid': dpid})
+            self.notification.push_topology_change('switch_added', {
+                'dpid': dpid,
+                'type': 'switch',
+                'name': name,
+                'zone': zone
+            })
 
     def handle_switch_leave(self, dpid):
         if dpid in self.switches:
@@ -203,15 +265,27 @@ class TopologyManager:
             
         self.host_location[mac] = (dpid, port)
         
+        # Lookup config
+        config = HOSTS.get(mac, {})
+        name = config.get('name', mac)
+        node_type = config.get('type', 'node') # Default to 'node'
+        zone = config.get('zone', 'Unknown')
+        
         # Update NodeInfo
         if mac not in self.nodes:
-            self.nodes[mac] = NodeInfo(mac, 'host', mac=mac, dpid=dpid, port=port, ip=ip)
+            self.nodes[mac] = NodeInfo(mac, node_type, name=name, zone=zone, status='online', mac=mac, dpid=dpid, port=port, ip=ip)
         else:
             node = self.nodes[mac]
             node.dpid = dpid
             node.port = port
             if ip:
                 node.ip = ip
+            # Update type/name if it was default before (optional, but good if config loaded late)
+            if node.type == 'node' and node_type != 'node':
+                node.type = node_type
+                node.name = name
+                node.zone = zone
+            
             node.last_seen = time.time()
         
         # Add host to graph for path finding
@@ -223,7 +297,10 @@ class TopologyManager:
         
         self.notification.push_topology_change('host_added', {
             'mac': mac, 'dpid': dpid, 'port': port,
-            'ip': self.host_ips.get(mac, '')
+            'ip': self.host_ips.get(mac, ''),
+            'type': node_type,
+            'name': name,
+            'zone': zone
         })
 
     def unregister_host(self, mac):

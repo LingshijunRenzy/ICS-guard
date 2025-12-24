@@ -101,28 +101,25 @@ class TrafficMonitor:
         if dpid in self.topology.nodes:
             self.topology.nodes[dpid].metrics = metrics
             self.topology.nodes[dpid].last_seen = time.time()
-            node_data = self.topology.nodes[dpid].to_dict()
-            # Ensure status is present for compatibility if needed, or just rely on type
-            node_data['status'] = 'online' 
-        else:
-            node_data = {
-                'id': str(dpid),
-                'type': 'switch',
-                'metrics': metrics,
-                'status': 'online'
-            }
         
-        if self._should_push_network_status(str(dpid), metrics):
-            self.notification.push_network_status(node_data)
+        if self._should_push_metrics(str(dpid), metrics):
+            self.notification.push_node_metrics(str(dpid), metrics)
             self.last_pushed_network_status[str(dpid)] = metrics
+            # Update timestamp to avoid pushing too frequently if metrics don't change but time passes
+            self.last_pushed_network_status[str(dpid)]['timestamp'] = time.time()
 
-    def _should_push_network_status(self, dpid, current_metrics):
+    def _should_push_metrics(self, dpid, current_metrics):
         if dpid not in self.last_pushed_network_status:
             return True
             
         last_metrics = self.last_pushed_network_status[dpid]
         
-        # Check throughput change > 10%
+        # Check time elapsed since last push (e.g., at least 2 seconds for metrics)
+        last_push_time = last_metrics.get('timestamp', 0)
+        if time.time() - last_push_time < 2.0:
+            return False
+
+        # Check throughput change > 5%
         curr_tp = current_metrics['network_throughput']
         last_tp = last_metrics['network_throughput']
         
@@ -131,7 +128,11 @@ class TrafficMonitor:
         
         if last_tp > 0:
             change = abs(curr_tp - last_tp) / last_tp
-            if change > 0.1: return True
+            if change > 0.05: return True
+            
+        # Heartbeat every 10s for metrics
+        if time.time() - last_push_time > 10.0:
+            return True
             
         return False
 
@@ -144,7 +145,7 @@ class TrafficMonitor:
         for stat in body:
             if stat.priority == 0:
                 continue
-                
+            
             match = stat.match
             if 'eth_src' not in match or 'eth_dst' not in match:
                 continue
@@ -190,8 +191,8 @@ class TrafficMonitor:
             
             self.flow_stats_history[granular_id] = (stat.packet_count, stat.byte_count, current_time)
             
-            # Aggregate for UI (Key: dpid-src-dst)
-            ui_flow_id = f"{dpid}-{src_mac}-{dst_mac}"
+            # Use granular ID for UI as well to show 5-tuple flows
+            ui_flow_id = granular_id
             
             if ui_flow_id not in aggregated_stats:
                 duration = stat.duration_sec + stat.duration_nsec / 1e9
@@ -205,17 +206,19 @@ class TrafficMonitor:
                     'dst_mac': dst_mac,
                     'src_ip': ipv4_src or host_ips.get(src_mac),
                     'dst_ip': ipv4_dst or host_ips.get(dst_mac),
+                    'src_port': src_port,
+                    'dst_port': dst_port,
                     'pkt_rate': 0.0,
                     'byte_rate': 0.0,
                     'packet_count': 0,
                     'byte_count': 0,
-                    'protocol': protocol, # Keep last seen protocol or 'MIXED'
+                    'protocol': protocol,
                     'timestamp': current_time,
                     'start_time': start_dt.isoformat(),
                     'end_time': now_dt.isoformat()
                 }
             
-            # Accumulate stats
+            # Accumulate stats (though for granular flows, this loop usually runs once per ID)
             agg = aggregated_stats[ui_flow_id]
             agg['pkt_rate'] += pkt_rate
             agg['byte_rate'] += byte_rate
@@ -228,7 +231,8 @@ class TrafficMonitor:
         
         for ui_flow_id, flow_data in aggregated_stats.items():
             # Only push update if aggregate flow is active
-            is_active = flow_data['pkt_rate'] > 0 or flow_data['byte_rate'] > 0
+            # For discovery, we want to see any flow that has packets, even if rate is currently 0
+            is_active = flow_data['packet_count'] > 0
             should_push = False
             
             if is_active:

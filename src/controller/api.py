@@ -113,37 +113,19 @@ class SDNControllerAPI(ControllerBase):
         nodes = []
         links = []
         
-        # Switches
-        for dpid in self.sdn_controller.topology.switches:
-            dpid_hex = "{:016x}".format(dpid)
-            name = SWITCHES.get(dpid_hex, 'Switch{}'.format(dpid))
-            nodes.append({
-                'id': str(dpid),
-                'name': name,
-                'type': 'switch',
-                'ip': '', 
-                'status': 'online'
-            })
+        # Use NodeInfo from TopologyManager which has correct types and names
+        for node_id, node_info in self.sdn_controller.topology.nodes.items():
+            nodes.append(node_info.to_dict())
             
-        # Hosts
-        for mac, (dpid, port) in self.sdn_controller.topology.host_location.items():
-            host_info = HOSTS.get(mac, {})
-            name = host_info.get('name', 'Host-{}'.format(mac))
-            nodes.append({
-                'id': mac,
-                'name': name,
-                'type': 'host',
-                'ip': self.sdn_controller.topology.host_ips.get(mac, ''), 
-                'status': 'online'
-            })
-            # Link between host and switch
-            links.append({
-                'id': '{}-{}'.format(dpid, mac),
-                'source': str(dpid),
-                'target': mac,
-                'bandwidth': 100, 
-                'status': 'active'
-            })
+            # If it's a host/device (not a switch), add the link to its switch
+            if node_info.type != 'switch' and node_info.dpid:
+                links.append({
+                    'id': '{}-{}'.format(node_info.dpid, node_info.id),
+                    'source': str(node_info.dpid),
+                    'target': str(node_info.id),
+                    'bandwidth': 100, 
+                    'status': 'active'
+                })
 
         # Switch Links
         added_links = set()
@@ -475,6 +457,10 @@ class SDNControllerAPI(ControllerBase):
     @websocket('ws_network_status', '/ws/network-status')
     def ws_network_status(self, ws):
         self._ws_handler(ws, 'network-status')
+
+    @websocket('ws_node_metrics', '/ws/node-metrics')
+    def ws_node_metrics(self, ws):
+        self._ws_handler(ws, 'node-metrics')
 
     @websocket('ws_honeypot_alerts', '/ws/honeypot-alerts')
     def ws_honeypot_alerts(self, ws):

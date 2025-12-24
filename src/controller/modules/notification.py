@@ -7,6 +7,7 @@ class NotificationManager:
         self.logger = logging.getLogger('NotificationManager')
         self.ws_clients = {
             'network-status': [],
+            'node-metrics': [],
             'honeypot-alerts': [],
             'flow-updates': [],
             'traffic-anomalies': [],
@@ -30,9 +31,12 @@ class NotificationManager:
             # To avoid flooding console with massive JSON, we might want to be concise for flows
             # But user asked to see what is pushed.
             data = payload.get('data', {})
-            flow_id = data.get('flow_id', 'unknown')
-            rate = data.get('pkt_rate', 0)
+            flow_id = data.get('flow', {}).get('id', 'unknown')
+            rate = data.get('flow', {}).get('pkt_rate', 0)
             self.logger.info(f"PUSH [FLOW] ID={flow_id} Rate={rate:.2f}")
+        elif channel in ['node-metrics', 'network-status']:
+            # Suppress verbose logs for metrics and status to focus on flows
+            pass
         else:
             self.logger.info(f"PUSH [{channel.upper()}] {json.dumps(payload)}")
 
@@ -49,7 +53,7 @@ class NotificationManager:
 
     def push_topology_change(self, change_type, data):
         payload = {
-            'type': 'TOPOLOGY_CHANGE',
+            'event': 'topology_change',
             'timestamp': datetime.utcnow().isoformat(),
             'data': {
                 'change_type': change_type,
@@ -59,17 +63,28 @@ class NotificationManager:
         self.broadcast('topology-changes', payload)
 
     def push_network_status(self, node_data):
-        # node_data should be a dict from NodeInfo.to_dict() or similar
+        # node_data: {node_id, status}
         payload = {
-            'type': 'NETWORK_STATUS',
+            'event': 'network_status_update',
             'timestamp': datetime.utcnow().isoformat(),
             'data': node_data
         }
         self.broadcast('network-status', payload)
 
+    def push_node_metrics(self, node_id, metrics):
+        payload = {
+            'event': 'node_metrics_update',
+            'timestamp': datetime.utcnow().isoformat(),
+            'data': {
+                'node_id': node_id,
+                'metrics': metrics
+            }
+        }
+        self.broadcast('node-metrics', payload)
+
     def push_traffic_anomaly(self, flow_id, details):
         payload = {
-            'type': 'TRAFFIC_ANOMALY',
+            'event': 'traffic_anomaly',
             'timestamp': datetime.utcnow().isoformat(),
             'data': {
                 'flow_id': flow_id,
@@ -80,7 +95,7 @@ class NotificationManager:
 
     def push_honeypot_alert(self, source_ip, details):
         payload = {
-            'type': 'HONEYPOT_INTERACTION',
+            'event': 'honeypot_interaction',
             'timestamp': datetime.utcnow().isoformat(),
             'data': {
                 'source_ip': source_ip,
@@ -90,5 +105,9 @@ class NotificationManager:
         self.broadcast('honeypot-alerts', payload)
 
     def push_flow_update(self, flow_data):
-        payload = {'type': 'FLOW_UPDATE', 'data': flow_data}
+        payload = {
+            'event': 'flow_update',
+            'timestamp': datetime.utcnow().isoformat(),
+            'data': {'flow': flow_data}
+        }
         self.broadcast('flow-updates', payload)

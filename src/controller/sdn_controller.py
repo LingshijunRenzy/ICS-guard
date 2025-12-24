@@ -4,7 +4,7 @@ from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER, DEAD_DISP
 from ryu.controller.handler import set_ev_cls
 from ryu.ofproto import ofproto_v1_3
 from ryu.app.wsgi import WSGIApplication
-from ryu.topology import switches
+from ryu.topology import switches, event
 from ryu.lib import hub
 
 # Import Modules
@@ -39,8 +39,24 @@ class SDNController(app_manager.RyuApp):
         wsgi.register(SDNControllerAPI, {API_INSTANCE_NAME: self})
         
         # Start Background Tasks
-        self.topology.start_discovery()
+        # self.topology.start_discovery() # Disable polling-based discovery
         self.traffic.start_monitoring()
+
+    @set_ev_cls(event.EventSwitchEnter)
+    def get_topology_data(self, ev):
+        self.topology.add_switch(ev.switch.dp.id)
+
+    @set_ev_cls(event.EventSwitchLeave)
+    def delete_topology_data(self, ev):
+        self.topology.remove_switch(ev.switch.dp.id)
+
+    @set_ev_cls(event.EventLinkAdd)
+    def link_add_handler(self, ev):
+        self.topology.handle_link_add(ev.link)
+
+    @set_ev_cls(event.EventLinkDelete)
+    def link_delete_handler(self, ev):
+        self.topology.handle_link_delete(ev.link)
 
     @set_ev_cls(ofp_event.EventOFPSwitchFeatures, CONFIG_DISPATCHER)
     def switch_features_handler(self, ev):

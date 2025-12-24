@@ -73,41 +73,25 @@ def record_event_for_ui(event: Event) -> None:
     简单环形缓冲：只保留最近 _ui_events_max_len 条。
     同时将重要事件持久化到数据库。
     """
-    # 1. 自动拆分逻辑：如果 network_status_update 包含指标，则拆分出 node_metrics_update
-    if event.event_type == EventType.NETWORK_STATUS:
-        data = event.data
-        metrics = {}
-        # 提取可能的指标字段
-        for field_name in ["cpu_usage", "memory_usage", "network_throughput"]:
-            if field_name in data:
-                metrics[field_name] = data.pop(field_name)
-        
-        if metrics:
-            # 构造并推送指标事件（不进入 _ui_events 缓存，也不持久化，仅实时推送）
-            metrics_event = {
-                "type": EventType.NODE_METRICS.value,
-                "timestamp": event.timestamp,
-                "data": {
-                    "node_id": data.get("node_id"),
-                    "metrics": metrics
-                }
-            }
-            try:
-                from .ui_events_ws import enqueue_ui_event
-                enqueue_ui_event(metrics_event)
-            except Exception:
-                pass
-            
-            # 如果 data 中只剩下 node_id 了（没有 status），则不再继续处理原始事件
-            if len(data) <= 1 and "node_id" in data:
-                return
-
     # 对 FLOW_UPDATE 事件，默认补充 detect_status=pending，方便前端展示
     if event.event_type == EventType.FLOW_UPDATE:
         try:
             event.data.setdefault("detect_status", "pending")
         except Exception:
             pass
+
+    # NODE_METRICS 事件仅实时推送，不记录到历史缓存，也不持久化
+    if event.event_type == EventType.NODE_METRICS:
+        try:
+            from .ui_events_ws import enqueue_ui_event
+            enqueue_ui_event({
+                "type": event.event_type.value,
+                "timestamp": event.timestamp,
+                "data": event.data,
+            })
+        except Exception:
+            pass
+        return
 
     with _ui_events_lock:
         _ui_events.append(event)
@@ -293,6 +277,7 @@ class EndpointSubscriber:
         """接收消息循环。"""
         async for message in ws:
             try:
+                print(f"[WS RECV] {self._endpoint}: {message}")
                 raw = json.loads(message)
                 event = self._parse_event(raw)
                 self._dispatch(event)
