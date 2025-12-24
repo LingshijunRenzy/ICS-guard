@@ -1,6 +1,6 @@
 from flask import Flask, jsonify
 
-from . import alerts, auth, audit, events, honeypot, model, policies, roles, topology, users
+from . import alerts, auth, audit, events, honeypot, model, policies, preferences, roles, topology, users
 from ..services.controller_client import (
     AuthenticationError,
     ControllerClientError,
@@ -89,3 +89,4 @@ def register_routes(app: Flask) -> None:
     app.register_blueprint(users.bp)
     app.register_blueprint(roles.bp)
     app.register_blueprint(audit.bp)
+    app.register_blueprint(preferences.bp)

@@ -425,4 +425,29 @@ export async function fetchCurrentUser() {
   return res.data
 }
 
+// ---- 偏好设置 ----
+
+export interface PreferenceResponse {
+  key: string
+  value: any
+  scope: string
+  updated_at: string | null
+}
+
+export async function getPreference(key: string, scope: 'user' | 'global' = 'user') {
+  const res = await apiClient.get<PreferenceResponse>(`/preferences/${key}`, {
+    params: { scope }
+  })
+  return res.data
+}
+
+export async function setPreference(key: string, value: any, scope: 'user' | 'global' = 'user') {
+  const res = await apiClient.put<{ status: string; message: string; key: string; scope: string }>(
+    `/preferences/${key}`,
+    { value, scope }
+  )
+  return res.data
+}
+
+
 

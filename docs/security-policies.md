@@ -24,28 +24,56 @@
   - `secondary_actions`: 次要动作 (数组, 示例: [ { "action_type": "log", "log_level": "info", "log_message": "访问PLC-01" } ])
 
 ### 条件定义 (Conditions)
-条件部分定义了策略触发所需满足的条件。不同类型的策略支持不同的条件字段：
+条件部分定义了策略触发所需满足的场景。条件必须与策略的作用域对象（节点、连接、流）在逻辑上保持一致。多个条件之间是 **AND** 关系，即必须同时满足所有条件才会触发动作。
 
-#### 节点级策略条件
-- `allowed_ips`: 允许访问的IP地址列表 (字符串数组, 示例: ["192.168.1.10", "192.168.1.20"])
-- `denied_ips`: 拒绝访问的IP地址列表 (字符串数组, 示例: ["192.168.1.30"])
-- `trigger_thresholds`: 触发阈值设置 (对象)
-  - `cpu_usage_percent`: CPU使用率百分比阈值 (整数, 0-100, 示例: 80)
-  - `memory_usage_percent`: 内存使用率百分值阈值 (整数, 0-100, 示例: 85)
-- `anomaly_detected`: 是否检测到异常 (布尔值, 示例: true)
+#### 数值型判定操作符
+所有数值型字段（如 CPU 使用率、速率、延迟等）均支持以下操作符后缀：
+- `_gt`: 大于 (Greater Than)
+- `_gte`: 大于等于 (Greater Than or Equal)
+- `_lt`: 小于 (Less Than)
+- `_lte`: 小于等于 (Less Than or Equal)
+- `_eq`: 等于 (Equal)
 
-#### 连接级策略条件
-- `allowed_protocols`: 允许的协议列表 (字符串数组, 示例: ["modbus", "http"])
-- `time_window`: 时间窗口 (对象)
-  - `start_time`: 开始时间 (字符串, HH:MM格式, 示例: "08:00")
-  - `end_time`: 结束时间 (字符串, HH:MM格式, 示例: "18:00")
-- `anomaly_detected`: 是否检测到异常 (布尔值, 示例: false)
+**示例**：`"cpu_usage_gte": 80` 表示 CPU 使用率大于等于 80%。
 
-#### 流级策略条件
-- `trigger_thresholds`: 触发阈值设置 (对象)
-  - `function_code_entropy`: 功能码熵值阈值 (浮点数, 0.0-1.0, 示例: 0.8)
-  - `duration_seconds`: 会话持续时间阈值（秒）(整数, 示例: 3600)
-- `suspicion_level`: 怀疑级别 (枚举: low/medium/high, 示例: "high")
+#### 1. 节点级策略条件 (Node-level Conditions)
+**场景**：当该节点本身或与其直接相关的交互满足以下条件时触发。
+
+- **流量方向 (Traffic)**:
+  - `ingress_filter`: 流入该节点的流量特征。包含 `src_ip` (源IP), `protocol` (协议), `pkt_rate` (包速率，支持操作符后缀) 等。
+    - *示例*: `{"protocol": "modbus", "pkt_rate_gt": 100}`
+  - `egress_filter`: 从该节点流出的流量特征。包含 `dst_ip` (目的IP), `pkt_rate` (包速率，支持操作符后缀) 等。
+- **资源状态 (Resource)**:
+  - `cpu_usage`: CPU 使用率百分比 (0-100，支持操作符后缀)。
+  - `mem_usage`: 内存使用率百分比 (0-100，支持操作符后缀)。
+- **安全状态 (Security)**:
+  - `anomaly_detected`: 节点是否被系统判定为存在异常行为 (布尔值)。
+  - `honeypot_triggered`: 如果该节点是蜜罐，是否发生了任何交互 (布尔值)。
+
+#### 2. 连接级策略条件 (Connection-level Conditions)
+**场景**：当该特定链路 (Link) 承载的活动满足以下条件时触发。
+
+- **链路负载 (Load)**:
+  - `bandwidth_usage`: 链路带宽使用率百分比 (支持操作符后缀)。
+  - `latency_ms`: 链路延迟 (毫秒，支持操作符后缀)。
+- **协议活动 (Protocol)**:
+  - `allowed_protocols`: 链路上允许运行的协议列表 (字符串数组)。
+- **时间窗口 (Schedule)**:
+  - `time_window`: 策略生效的特定时间段。包含 `start_time` (HH:MM), `end_time` (HH:MM) 和 `days` (周几，1-7)。
+- **安全状态 (Security)**:
+  - `anomaly_detected`: 链路两端节点间是否存在异常通信 (布尔值)。
+
+#### 3. 流级策略条件 (Flow-level Conditions)
+**场景**：当符合作用域定义的特定数据流 (Flow) 表现出以下特征时触发。
+
+- **统计特征 (Stats)**:
+  - `byte_rate`: 流的字节速率 (Bytes/s，支持操作符后缀)。
+  - `duration`: 流的持续时间 (秒，支持操作符后缀)。
+- **内容特征 (Content)**:
+  - `function_code_entropy`: 功能码熵值 (0.0-1.0，支持操作符后缀)。
+  - `payload_anomaly_score`: 载荷异常评分 (支持操作符后缀)。
+- **状态判定 (Status)**:
+  - `is_new_flow`: 是否为新建立的未知会话 (布尔值)。
 
 ### 动作定义 (Actions)
 动作部分定义了当条件满足时要执行的操作。每个策略可以定义一个主要动作和多个次要动作。
@@ -180,8 +208,11 @@
       "target_identifier": "PLC-01"
     },
     "conditions": {
-      "allowed_ips": ["192.168.1.10", "192.168.1.20"],
-      "denied_ips": ["192.168.1.30"]
+      "ingress_filter": {
+        "src_ip": "192.168.1.10",
+        "protocol": "modbus"
+      },
+      "anomaly_detected": false
     },
     "actions": {
       "primary_action": {
@@ -221,10 +252,8 @@
       "target_identifier": "PLC-01"
     },
     "conditions": {
-      "trigger_thresholds": {
-        "cpu_usage_percent": 80,
-        "memory_usage_percent": 85
-      }
+      "cpu_usage_gte": 85,
+      "mem_usage_gte": 90
     },
     "actions": {
       "primary_action": {
@@ -296,6 +325,49 @@
 }
 ```
 
+### 4. 蜜罐诱捕策略
+
+当蜜罐节点被触发时，记录并告警。
+
+示例：
+```json
+{
+  "policy": {
+    "id": "node-honeypot-001",
+    "name": "Honeypot-Trigger-Alert",
+    "description": "蜜罐节点触发告警",
+    "type": "node",
+    "subtype": "honeypot_trap",
+    "status": "active",
+    "priority": 10,
+    "scope": {
+      "target_type": "device",
+      "target_identifier": "Honeypot-01"
+    },
+    "conditions": {
+      "honeypot_triggered": true
+    },
+    "actions": {
+      "primary_action": {
+        "action_type": "alert",
+        "action_params": {
+          "alert_level": "critical"
+        }
+      },
+      "secondary_actions": [
+        {
+          "action_type": "log",
+          "action_params": {
+            "log_level": "alert",
+            "log_message": "检测到对蜜罐节点的非法访问"
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
 ## 连接级策略
 
 连接级策略控制节点间的通信连接。
@@ -320,9 +392,11 @@
       "target_identifier": "conn-plc-hmi"
     },
     "conditions": {
+      "bandwidth_usage_gt": 70,
       "time_window": {
         "start_time": "08:00",
-        "end_time": "18:00"
+        "end_time": "18:00",
+        "days": [1, 2, 3, 4, 5]
       }
     },
     "actions": {
@@ -460,9 +534,8 @@
       "target_identifier": "modbus"
     },
     "conditions": {
-      "trigger_thresholds": {
-        "function_code_entropy": 0.8
-      }
+      "function_code_entropy_gt": 0.8,
+      "byte_rate_gt": 10000
     },
     "actions": {
       "primary_action": {
@@ -510,7 +583,7 @@
       "target_identifier": "192.168.1.0/24"
     },
     "conditions": {
-      "suspicion_level": "high"
+      "payload_anomaly_score_gt": 0.9
     },
     "actions": {
       "primary_action": {
@@ -561,9 +634,7 @@
       "target_identifier": "modbus"
     },
     "conditions": {
-      "trigger_thresholds": {
-        "duration_seconds": 3600
-      }
+      "duration_gt": 3600
     },
     "actions": {
       "primary_action": {

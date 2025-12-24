@@ -7,6 +7,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import * as d3 from 'd3-force'
+import { usePreferenceStore, type TopologyLayout } from '@/stores/preference'
 
 interface NodeObject {
   id: string
@@ -76,6 +77,8 @@ let ws: WebSocket | null = null
 const flowAnimations: Map<string, FlowAnimation> = new Map()
 let hoveredLink: LinkObject | null = null
 let hoveredNode: NodeObject | null = null
+
+const preferenceStore = usePreferenceStore()
 
 const CONFIG = {
   nodeSize: 55,
@@ -267,9 +270,11 @@ const createNodeMesh = (node: TopologyNode, degree: number): THREE.Group => {
   const geometry = new THREE.BoxGeometry(size, height, size)
   const edges = new THREE.EdgesGeometry(geometry)
   const wireframe = new THREE.LineSegments(edges, borderMaterial)
+  wireframe.name = 'wireframe'
   group.add(wireframe)
 
   const cornerWireframe = createCornerWireframe(size, height, cornerLength, cornerMaterial)
+  cornerWireframe.name = 'cornerWireframe'
   group.add(cornerWireframe)
 
   const planeGeo = new THREE.PlaneGeometry(size - 2, size - 2)
@@ -282,6 +287,7 @@ const createNodeMesh = (node: TopologyNode, degree: number): THREE.Group => {
   const plane = new THREE.Mesh(planeGeo, planeMat)
   plane.rotation.x = -Math.PI / 2
   plane.position.y = -height / 2 + 0.1
+  plane.name = 'plane'
   group.add(plane)
 
   const normalizedDegree = Math.min(degree, 20) / 20
@@ -296,7 +302,31 @@ const createNodeMesh = (node: TopologyNode, degree: number): THREE.Group => {
     side: THREE.FrontSide
   })
   const core = new THREE.Mesh(coreGeo, coreMat)
+  core.name = 'core'
   group.add(core)
+
+  // 创建离线状态的交叉线条
+  const crossMaterial = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 })
+  const crossGroup = new THREE.Group()
+  const line1Points = [
+    new THREE.Vector3(-size / 2, 0, -size / 2),
+    new THREE.Vector3(size / 2, 0, size / 2)
+  ]
+  const line1Geo = new THREE.BufferGeometry().setFromPoints(line1Points)
+  const line1 = new THREE.Line(line1Geo, crossMaterial)
+
+  const line2Points = [
+    new THREE.Vector3(size / 2, 0, -size / 2),
+    new THREE.Vector3(-size / 2, 0, size / 2)
+  ]
+  const line2Geo = new THREE.BufferGeometry().setFromPoints(line2Points)
+  const line2 = new THREE.Line(line2Geo, crossMaterial)
+
+  crossGroup.add(line1)
+  crossGroup.add(line2)
+  crossGroup.visible = false
+  crossGroup.name = 'crossLines'
+  group.add(crossGroup)
 
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d')
@@ -324,10 +354,24 @@ const createNodeMesh = (node: TopologyNode, degree: number): THREE.Group => {
     sprite.userData.isLabel = true
     sprite.userData.baseScale = { x: 120, y: 30 }
     sprite.renderOrder = 999
+    sprite.name = 'label'
     group.add(sprite)
   }
 
-  group.userData = { isNode: true, id: node.id, data: node }
+  group.userData = {
+    isNode: true,
+    id: node.id,
+    data: node,
+    originalHeight: height,
+    originalBaseColor: baseColor.clone()
+  }
+
+  // 初始化视觉状态
+  if (node.status === 'offline') {
+    // 模拟调用 updateNodeVisuals 的逻辑，或者直接在这里设置
+    // 为了避免循环依赖，这里简单设置一下，或者稍后定义 updateNodeVisuals 并调用
+    // 由于 updateNodeVisuals 还没定义，我们稍后在 updateTopology 中统一调用
+  }
 
   return group
 }
@@ -389,6 +433,73 @@ const findConnectedComponents = (nodes: TopologyNode[], links: TopologyLink[]): 
   return components
 }
 
+const updateNodeVisuals = (nodeObj: NodeObject) => {
+  const group = nodeObj.threeGroup
+  const node = nodeObj.data
+  const isOffline = node.status === 'offline'
+
+  const core = group.getObjectByName('core')
+  const wireframe = group.getObjectByName('wireframe')
+  const cornerWireframe = group.getObjectByName('cornerWireframe')
+  const plane = group.getObjectByName('plane') as THREE.Mesh
+  const crossLines = group.getObjectByName('crossLines')
+
+  const originalBaseColor = group.userData.originalBaseColor || new THREE.Color(0x00ff00)
+
+  if (isOffline) {
+    // Height 1/4
+    const scale = 0.25
+    if (core) {
+      core.scale.y = scale
+      core.position.y = -group.userData.originalHeight * (1 - scale) / 2
+    }
+    if (wireframe) {
+      wireframe.scale.y = scale
+      wireframe.position.y = -group.userData.originalHeight * (1 - scale) / 2
+    }
+    if (cornerWireframe) {
+      cornerWireframe.scale.y = scale
+      cornerWireframe.position.y = -group.userData.originalHeight * (1 - scale) / 2
+    }
+
+    // Color 50% brightness
+    if (plane && plane.material instanceof THREE.MeshBasicMaterial) {
+      const dimmedColor = originalBaseColor.clone().multiplyScalar(0.5)
+      plane.material.color.copy(dimmedColor)
+    }
+
+    // Show cross
+    if (crossLines) {
+      crossLines.visible = true
+      crossLines.position.y = -group.userData.originalHeight / 2 + 0.2 // 略高于底座
+    }
+
+  } else {
+    // Restore
+    if (core) {
+      core.scale.y = 1.0
+      core.position.y = 0
+    }
+    if (wireframe) {
+      wireframe.scale.y = 1.0
+      wireframe.position.y = 0
+    }
+    if (cornerWireframe) {
+      cornerWireframe.scale.y = 1.0
+      cornerWireframe.position.y = 0
+    }
+
+    if (plane && plane.material instanceof THREE.MeshBasicMaterial) {
+      plane.material.color.copy(originalBaseColor)
+    }
+
+    if (crossLines) {
+      crossLines.visible = false
+      crossLines.position.y = 0
+    }
+  }
+}
+
 const updateTopology = (data: TopologyResponse) => {
   nodeObjects.forEach(obj => scene.remove(obj.threeGroup))
   linkObjects.forEach(obj => scene.remove(obj.threeMesh))
@@ -423,19 +534,49 @@ const updateTopology = (data: TopologyResponse) => {
     const group = createNodeMesh(node, degree)
     scene.add(group)
 
-    const center = componentCenters.get(node.id) || { x: 0, y: 0 }
-    const offsetX = (Math.random() - 0.5) * 100
-    const offsetY = (Math.random() - 0.5) * 100
+    // 检查是否有保存的位置
+    const savedPos = preferenceStore.topologyLayout[node.id]
+
+    let x, y, fx, fy
+
+    if (savedPos) {
+      x = savedPos.x
+      y = savedPos.y
+      fx = savedPos.x
+      fy = savedPos.y
+    } else {
+      const center = componentCenters.get(node.id) || { x: 0, y: 0 }
+      const type = node.type.toLowerCase()
+      const isCore = type === 'switch' || type === 'router'
+
+      // 核心设备靠近中心，其他设备远离中心
+      const radius = isCore ? 50 : 250
+      const angle = Math.random() * Math.PI * 2
+      const offsetX = Math.cos(angle) * radius * (0.5 + Math.random() * 0.5)
+      const offsetY = Math.sin(angle) * radius * (0.5 + Math.random() * 0.5)
+
+      x = center.x + offsetX
+      y = center.y + offsetY
+      fx = null
+      fy = null
+    }
 
     const nodeObj: NodeObject = {
       id: node.id,
       threeGroup: group,
       data: node,
-      x: center.x + offsetX,
-      y: center.y + offsetY,
+      x: x,
+      y: y,
+      vx: 0,
+      vy: 0,
+      fx: fx,
+      fy: fy,
       degree
     }
     nodeObjects.set(node.id, nodeObj)
+
+    // 初始化视觉状态
+    updateNodeVisuals(nodeObj)
 
     return nodeObj
   })
@@ -475,10 +616,33 @@ const updateTopology = (data: TopologyResponse) => {
     .force('charge', d3.forceManyBody().strength(-1000))
     .force('center', d3.forceCenter(0, 0).strength(0.1))
     .force('collide', d3.forceCollide(CONFIG.nodeSize * 1.5))
+    .force('typeForce', (alpha: number) => {
+      nodeObjects.forEach(node => {
+        const type = node.data.type.toLowerCase()
+        const isCore = type === 'switch' || type === 'router'
+
+        // 核心节点向中心吸引，边缘节点向外推（或保持在外面）
+        // 这里我们只加强核心节点向中心的吸引力
+        if (isCore) {
+          const strength = alpha * 0.1
+          node.vx = (node.vx || 0) + (0 - node.x) * strength
+          node.vy = (node.vy || 0) + (0 - node.y) * strength
+        } else {
+          // 非核心节点如果太靠近中心，稍微往外推一点
+          const dist = Math.sqrt(node.x * node.x + node.y * node.y)
+          if (dist < 150) {
+            const strength = alpha * 0.05
+            const angle = Math.atan2(node.y, node.x)
+            node.vx = (node.vx || 0) + Math.cos(angle) * 50 * strength
+            node.vy = (node.vy || 0) + Math.sin(angle) * 50 * strength
+          }
+        }
+      })
+    })
     .force('component', (alpha: number) => {
       const componentPositions = new Map<number, { x: number; y: number; count: number }>()
 
-      d3Nodes.forEach(node => {
+      nodeObjects.forEach(node => {
         const compId = componentMap.get(node.id) ?? -1
         if (!componentPositions.has(compId)) {
           componentPositions.set(compId, { x: 0, y: 0, count: 0 })
@@ -494,7 +658,7 @@ const updateTopology = (data: TopologyResponse) => {
         pos.y /= pos.count
       })
 
-      d3Nodes.forEach(node => {
+      nodeObjects.forEach(node => {
         const compId = componentMap.get(node.id) ?? -1
         const compCenter = componentPositions.get(compId)
         if (compCenter && compId >= 0) {
@@ -510,7 +674,7 @@ const updateTopology = (data: TopologyResponse) => {
       })
     })
     .on('tick', () => {
-      d3Nodes.forEach(node => {
+      nodeObjects.forEach(node => {
         if (node.fx !== undefined && node.fx !== null && node.fy !== undefined && node.fy !== null) {
           node.x = node.fx
           node.y = node.fy
@@ -545,6 +709,22 @@ const updateTopology = (data: TopologyResponse) => {
         link.threeMesh.lookAt(end)
       })
     })
+
+  // 自动保存逻辑：延迟 3 秒后保存当前布局
+  setTimeout(() => {
+    const currentLayout: TopologyLayout = {}
+    let hasNewPositions = false
+    nodeObjects.forEach(node => {
+      currentLayout[node.id] = { x: node.x, y: node.y }
+      if (!preferenceStore.topologyLayout[node.id]) {
+        hasNewPositions = true
+      }
+    })
+
+    if (hasNewPositions) {
+      preferenceStore.saveTopologyLayout(currentLayout)
+    }
+  }, 3000)
 }
 
 const findPath = (sourceId: string, targetId: string): NodeObject[] | null => {
@@ -603,7 +783,7 @@ const createFlowAnimation = (sourceId: string, targetId: string, pathHops?: any[
   if (pathHops && pathHops.length > 0) {
     // 尝试使用 path_hops 构建路径
     const hopPath: NodeObject[] = []
-    
+
     for (const hop of pathHops) {
       const nodeId = hop.node_id
       const node = nodeObjects.get(nodeId)
@@ -621,7 +801,7 @@ const createFlowAnimation = (sourceId: string, targetId: string, pathHops?: any[
   if (!path || path.length < 2) {
     path = findPath(sourceId, targetId)
   }
-  
+
   if (!path || path.length < 2) return
 
   const flowId = `flow_${Date.now()}_${Math.random()}`
@@ -670,11 +850,11 @@ const createBlockedLabel = (position: THREE.Vector3): THREE.Sprite => {
   if (ctx) {
     canvas.width = 512
     canvas.height = 128
-    
+
     // 正红色背景
     ctx.fillStyle = '#FF0000'
     ctx.fillRect(0, 0, 512, 128)
-    
+
     // 文字
     ctx.font = 'bold 64px "0xProto Nerd Font", monospace'
     ctx.fillStyle = '#000000'
@@ -729,7 +909,7 @@ const updateFlowAnimations = () => {
         // 路径总段数 = path.length - 1
         // 到达 stopIndex 节点的段数 = stopIndex
         const targetProgress = stopIndex / (anim.path.length - 1)
-        
+
         // 允许一点误差，或者直接判断是否超过
         if (anim.progress >= targetProgress) {
           shouldStop = true
@@ -757,7 +937,7 @@ const updateFlowAnimations = () => {
           const label = createBlockedLabel(labelPos)
           scene.add(label)
           anim.blockedLabel = label
-          
+
           // 立即隐藏 Flow Mesh
           anim.mesh.visible = false
 
@@ -780,7 +960,7 @@ const updateFlowAnimations = () => {
             flowAnimations.delete(anim.id)
           }, 1000) // 停留1秒展示 BLOCKED
         }
-        
+
         return
       }
     }
@@ -838,9 +1018,9 @@ const connectWebSocket = () => {
 
   ws.onmessage = (ev) => {
     try {
-      const data = JSON.parse(ev.data) as UiEventItem
-      if (data && data.type && data.data) {
-        const eventType = data.type.toLowerCase()
+      const data = JSON.parse(ev.data)
+      if (data && (data.type || data.event) && data.data) {
+        const eventType = (data.type || data.event).toLowerCase()
         const eventData = data.data
 
         // 处理节点状态更新
@@ -869,6 +1049,135 @@ const connectWebSocket = () => {
             // 如果当前选中了该节点，更新详情面板
             if (selectedNode.value && selectedNode.value.id === nodeId) {
               selectedNode.value = { ...nodeObj.data }
+            }
+          }
+        }
+
+        // 处理拓扑变更
+        if (eventType === 'topology_change') {
+          const changeType = eventData.change_type
+          const details = eventData.details
+
+          if (changeType === 'node_added' || changeType === 'node_updated') {
+            const nodeData = details.node
+            if (nodeData) {
+              let nodeObj = nodeObjects.get(nodeData.id)
+              if (nodeObj) {
+                // Update existing
+                nodeObj.data = { ...nodeObj.data, ...nodeData }
+              } else {
+                // Add new node
+                const group = createNodeMesh(nodeData, 0)
+                scene.add(group)
+
+                const savedPos = preferenceStore.topologyLayout[nodeData.id]
+                let x = 0, y = 0, fx: number | null = null, fy: number | null = null
+                if (savedPos) {
+                  x = savedPos.x
+                  y = savedPos.y
+                  fx = x
+                  fy = y
+                } else {
+                  const type = nodeData.type.toLowerCase()
+                  const isCore = type === 'switch' || type === 'router'
+
+                  // 计算当前所有节点的中心点作为参考
+                  let centerX = 0, centerY = 0
+                  if (nodeObjects.size > 0) {
+                    nodeObjects.forEach(obj => {
+                      centerX += obj.x
+                      centerY += obj.y
+                    })
+                    centerX /= nodeObjects.size
+                    centerY /= nodeObjects.size
+                  }
+
+                  const radius = isCore ? 50 : 250
+                  const angle = Math.random() * Math.PI * 2
+                  x = centerX + Math.cos(angle) * radius
+                  y = centerY + Math.sin(angle) * radius
+                }
+
+                nodeObj = {
+                  id: nodeData.id,
+                  threeGroup: group,
+                  data: nodeData,
+                  x, y, vx: 0, vy: 0, fx, fy,
+                  degree: 0
+                }
+                nodeObjects.set(nodeData.id, nodeObj)
+
+                if (simulation) {
+                  simulation.nodes(Array.from(nodeObjects.values()))
+                  simulation.alpha(0.3).restart()
+                }
+              }
+            }
+          } else if (changeType === 'node_removed') {
+            const nodeId = details.node_id
+            const nodeObj = nodeObjects.get(nodeId)
+            if (nodeObj) {
+              scene.remove(nodeObj.threeGroup)
+              nodeObjects.delete(nodeId)
+              if (simulation) {
+                simulation.nodes(Array.from(nodeObjects.values()))
+                simulation.alpha(0.3).restart()
+              }
+            }
+          } else if (changeType === 'node_status_changed') {
+            const nodeId = details.node_id
+            const newStatus = details.current_status
+            const nodeObj = nodeObjects.get(nodeId)
+            if (nodeObj) {
+              nodeObj.data.status = newStatus
+              if (selectedNode.value && selectedNode.value.id === nodeId) {
+                selectedNode.value = { ...nodeObj.data }
+              }
+
+              updateNodeVisuals(nodeObj)
+            }
+          } else if (changeType === 'link_added') {
+            const linkData = details.link
+            if (linkData) {
+              const sourceNode = nodeObjects.get(linkData.source)
+              const targetNode = nodeObjects.get(linkData.target)
+              if (sourceNode && targetNode) {
+                // 检查是否已存在
+                if (!linkObjects.find(l => l.data.id === linkData.id)) {
+                  const mesh = createLinkMesh()
+                  scene.add(mesh)
+                  const linkObj: LinkObject = {
+                    source: sourceNode,
+                    target: targetNode,
+                    threeMesh: mesh,
+                    data: linkData,
+                    originalColor: new THREE.Color(0xffffff)
+                  }
+                  linkObjects.push(linkObj)
+                  if (simulation) {
+                    const linkForce = simulation.force('link') as d3.ForceLink<NodeObject, LinkObject>
+                    if (linkForce) {
+                      linkForce.links(linkObjects)
+                    }
+                    simulation.alpha(0.3).restart()
+                  }
+                }
+              }
+            }
+          } else if (changeType === 'link_removed') {
+            const linkId = details.link_id
+            const index = linkObjects.findIndex(l => l.data.id === linkId)
+            if (index !== -1) {
+              const linkObj = linkObjects[index]
+              scene.remove(linkObj.threeMesh)
+              linkObjects.splice(index, 1)
+              if (simulation) {
+                const linkForce = simulation.force('link') as d3.ForceLink<NodeObject, LinkObject>
+                if (linkForce) {
+                  linkForce.links(linkObjects)
+                }
+                simulation.alpha(0.3).restart()
+              }
             }
           }
         }
@@ -1000,11 +1309,17 @@ const onMouseUp = (event: MouseEvent) => {
     if (dragDistance < 5) {
       selectNode(draggedNode.data)
       selectLink(null)
+    } else {
+      // 拖拽结束，保存位置并固定
+      preferenceStore.updateNodePosition(draggedNode.id, draggedNode.x, draggedNode.y)
+      draggedNode.fx = draggedNode.x
+      draggedNode.fy = draggedNode.y
     }
 
     if (simulation) {
-      draggedNode.fx = undefined
-      draggedNode.fy = undefined
+      // 保持固定，不再释放
+      // draggedNode.fx = undefined
+      // draggedNode.fy = undefined
       simulation.alphaTarget(0)
     }
 
@@ -1806,6 +2121,7 @@ onUnmounted(() => {
   text-shadow: 1px 1px 2px #000;
   font-weight: bold;
 }
+
 .connected-list {
   max-height: 300px;
   overflow-y: auto;

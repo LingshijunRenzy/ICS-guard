@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { PolicySummary, PolicyDetail, TopologyResponse } from '@/api/client'
 import {
@@ -72,6 +72,25 @@ const filteredPolicies = computed(() => {
   return result.sort((a, b) => (a.priority || 999) - (b.priority || 999))
 })
 
+const targetTypeOptions = computed(() => {
+  const type = formData.value.type
+  if (type === 'node') return [{ label: '设备', value: 'device' }]
+  if (type === 'connection') return [{ label: '连接', value: 'connection' }]
+  if (type === 'flow') return [
+    { label: '协议', value: 'protocol' },
+    { label: 'IP段', value: 'ip_range' },
+    { label: '设备', value: 'device' }
+  ]
+  return []
+})
+
+watch(() => formData.value.type, () => {
+  if (formData.value.scope) {
+    formData.value.scope.target_type = '' as any
+    formData.value.scope.target_identifier = ''
+  }
+})
+
 // 加载数据
 const loadPolicies = async () => {
   loading.value = true
@@ -125,7 +144,17 @@ const openDrawer = async (mode: 'view' | 'edit' | 'create', policyId?: string) =
   } else if (policyId) {
     try {
       currentPolicy.value = await fetchPolicy(policyId)
-      formData.value = { ...currentPolicy.value }
+      const data = { ...currentPolicy.value }
+
+      // Transform nested time_window for UI binding
+      if (data.conditions && (data.conditions as any).time_window) {
+        const tw = (data.conditions as any).time_window
+          ; (data.conditions as any).time_window_start = tw.start_time
+          ; (data.conditions as any).time_window_end = tw.end_time
+          ; (data.conditions as any).time_window_days = tw.days
+      }
+
+      formData.value = data
     } catch (e) {
       ElMessage.error('加载策略详情失败')
       return
@@ -138,11 +167,28 @@ const openDrawer = async (mode: 'view' | 'edit' | 'create', policyId?: string) =
 // 保存策略
 const savePolicy = async () => {
   try {
+    const submitData = JSON.parse(JSON.stringify(formData.value))
+
+    // Transform UI fields back to nested time_window
+    if (submitData.conditions) {
+      const c = submitData.conditions
+      if (c.time_window_start || c.time_window_end || c.time_window_days) {
+        c.time_window = {
+          start_time: c.time_window_start,
+          end_time: c.time_window_end,
+          days: c.time_window_days
+        }
+        delete c.time_window_start
+        delete c.time_window_end
+        delete c.time_window_days
+      }
+    }
+
     if (drawerMode.value === 'create') {
-      await createPolicy(formData.value)
+      await createPolicy(submitData)
       ElMessage.success('策略创建成功')
     } else if (currentPolicy.value) {
-      await updatePolicy(currentPolicy.value.id, formData.value)
+      await updatePolicy(currentPolicy.value.id, submitData)
       ElMessage.success('策略更新成功')
     }
     drawerVisible.value = false
@@ -228,6 +274,18 @@ const handleRevoke = async (policy: PolicySummary) => {
   }
 }
 
+watch(() => formData.value.actions?.primary_action.action_type, (newType) => {
+  if (!formData.value.actions?.primary_action) return
+  if (!formData.value.actions.primary_action.action_params) {
+    formData.value.actions.primary_action.action_params = {}
+  }
+  const params = formData.value.actions.primary_action.action_params
+
+  if (newType === 'throttle' && !params.rate_limit) {
+    params.rate_limit = { bandwidth_mbps: 10 }
+  }
+})
+
 // 添加次要动作
 const addSecondaryAction = () => {
   if (!formData.value.actions) {
@@ -247,6 +305,9 @@ const addSecondaryAction = () => {
     action_params: {
       log_level: 'info',
       log_message: '',
+      blocked_protocols: [],
+      rate_limit: {},
+      redirect_target: ''
     }
   })
 }
@@ -453,10 +514,7 @@ onMounted(() => {
             <div class="section-title">作用域</div>
             <el-form-item label="目标类型" required>
               <el-select v-model="formData.scope!.target_type" placeholder="选择目标类型" style="width: 100%">
-                <el-option label="设备" value="device" />
-                <el-option label="连接" value="connection" />
-                <el-option label="协议" value="protocol" />
-                <el-option label="IP段" value="ip_range" />
+                <el-option v-for="opt in targetTypeOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
               </el-select>
             </el-form-item>
             <el-form-item label="目标标识" required>
@@ -477,133 +535,114 @@ onMounted(() => {
           <!-- 条件配置（根据类型动态显示） -->
           <div class="form-section">
             <div class="section-title">条件配置</div>
+
+            <!-- Node Conditions -->
             <div v-if="formData.type === 'node'" class="conditions-node">
-              <el-form-item label="允许IP">
-                <el-input :model-value="Array.isArray((formData.conditions as any)?.allowed_ips)
-                    ? (formData.conditions as any).allowed_ips.join(', ')
-                    : ''
-                  " placeholder="逗号分隔的IP地址，如: 192.168.1.10, 192.168.1.20" @input="
-                    (val: string) => {
-                      if (!formData.conditions) formData.conditions = {}
-                        ; (formData.conditions as any).allowed_ips = val
-                          .split(',')
-                          .map((s: string) => s.trim())
-                          .filter(Boolean)
-                    }
-                  " />
+              <el-divider content-position="left">流量方向 (Traffic)</el-divider>
+              <el-form-item label="流入特征 (JSON)">
+                <el-input :model-value="JSON.stringify((formData.conditions as any)?.ingress_filter || {}, null, 2)"
+                  type="textarea" :rows="2" placeholder='{"src_ip": "10.0.0.5", "protocol": "modbus"}'
+                  @input="(val: string) => { try { if (!formData.conditions) formData.conditions = {}; (formData.conditions as any).ingress_filter = JSON.parse(val) } catch (e) { } }" />
               </el-form-item>
-              <el-form-item label="拒绝IP">
-                <el-input :model-value="Array.isArray((formData.conditions as any)?.denied_ips)
-                    ? (formData.conditions as any).denied_ips.join(', ')
-                    : ''
-                  " placeholder="逗号分隔的IP地址，如: 192.168.1.30" @input="
-                    (val: string) => {
-                      if (!formData.conditions) formData.conditions = {}
-                        ; (formData.conditions as any).denied_ips = val
-                          .split(',')
-                          .map((s: string) => s.trim())
-                          .filter(Boolean)
-                    }
-                  " />
+              <el-form-item label="流出特征 (JSON)">
+                <el-input :model-value="JSON.stringify((formData.conditions as any)?.egress_filter || {}, null, 2)"
+                  type="textarea" :rows="2" placeholder='{"dst_ip": "10.0.0.20", "pkt_rate_gt": 100}'
+                  @input="(val: string) => { try { if (!formData.conditions) formData.conditions = {}; (formData.conditions as any).egress_filter = JSON.parse(val) } catch (e) { } }" />
               </el-form-item>
-              <el-form-item label="CPU阈值 (%)">
-                <el-input-number :model-value="(formData.conditions as any)?.trigger_thresholds?.cpu_usage_percent"
-                  :min="0" :max="100" style="width: 100%" @update:model-value="
-                    (val: number) => {
-                      if (!formData.conditions) formData.conditions = {}
-                      if (!(formData.conditions as any).trigger_thresholds) {
-                        ; (formData.conditions as any).trigger_thresholds = {}
-                      }
-                      ; (formData.conditions as any).trigger_thresholds.cpu_usage_percent = val
-                    }
-                  " />
-              </el-form-item>
-              <el-form-item label="内存阈值 (%)">
-                <el-input-number :model-value="(formData.conditions as any)?.trigger_thresholds?.memory_usage_percent"
-                  :min="0" :max="100" style="width: 100%" @update:model-value="
-                    (val: number) => {
-                      if (!formData.conditions) formData.conditions = {}
-                      if (!(formData.conditions as any).trigger_thresholds) {
-                        ; (formData.conditions as any).trigger_thresholds = {}
-                      }
-                      ; (formData.conditions as any).trigger_thresholds.memory_usage_percent = val
-                    }
-                  " />
-              </el-form-item>
+
+              <el-divider content-position="left">资源状态 (Resource)</el-divider>
+              <div style="display: flex; gap: 10px">
+                <el-form-item label="CPU > (%)" style="flex: 1">
+                  <el-input-number v-model="(formData.conditions as any).cpu_usage_gt" :min="0" :max="100"
+                    style="width: 100%" />
+                </el-form-item>
+                <el-form-item label="内存 > (%)" style="flex: 1">
+                  <el-input-number v-model="(formData.conditions as any).mem_usage_gt" :min="0" :max="100"
+                    style="width: 100%" />
+                </el-form-item>
+              </div>
+
+              <el-divider content-position="left">安全状态 (Security)</el-divider>
+              <div style="display: flex; gap: 20px">
+                <el-form-item label="检测到异常">
+                  <el-switch v-model="(formData.conditions as any).anomaly_detected" />
+                </el-form-item>
+                <el-form-item label="蜜罐触发">
+                  <el-switch v-model="(formData.conditions as any).honeypot_triggered" />
+                </el-form-item>
+              </div>
             </div>
+
+            <!-- Connection Conditions -->
             <div v-else-if="formData.type === 'connection'" class="conditions-connection">
+              <el-divider content-position="left">链路负载 (Load)</el-divider>
+              <div style="display: flex; gap: 10px">
+                <el-form-item label="带宽 > (%)" style="flex: 1">
+                  <el-input-number v-model="(formData.conditions as any).bandwidth_usage_gt" :min="0" :max="100"
+                    style="width: 100%" />
+                </el-form-item>
+                <el-form-item label="延迟 > (ms)" style="flex: 1">
+                  <el-input-number v-model="(formData.conditions as any).latency_ms_gt" :min="0" style="width: 100%" />
+                </el-form-item>
+              </div>
+
+              <el-divider content-position="left">协议与时间</el-divider>
               <el-form-item label="允许协议">
-                <el-input :model-value="Array.isArray((formData.conditions as any)?.allowed_protocols)
-                    ? (formData.conditions as any).allowed_protocols.join(', ')
-                    : ''
-                  " placeholder="逗号分隔的协议名，如: modbus, http" @input="
-                    (val: string) => {
-                      if (!formData.conditions) formData.conditions = {}
-                        ; (formData.conditions as any).allowed_protocols = val
-                          .split(',')
-                          .map((s: string) => s.trim())
-                          .filter(Boolean)
-                    }
-                  " />
+                <el-input :model-value="((formData.conditions as any)?.allowed_protocols || []).join(', ')"
+                  placeholder="modbus, s7comm"
+                  @input="(val: string) => { if (!formData.conditions) formData.conditions = {}; (formData.conditions as any).allowed_protocols = val.split(',').map(s => s.trim()).filter(Boolean) }" />
               </el-form-item>
               <el-form-item label="时间窗口">
-                <div style="display: flex; gap: 10px">
-                  <el-time-picker :model-value="(formData.conditions as any)?.time_window?.start_time" format="HH:mm"
-                    placeholder="开始时间" style="flex: 1" @update:model-value="
-                      (val: any) => {
-                        if (!formData.conditions) formData.conditions = {}
-                        if (!(formData.conditions as any).time_window) {
-                          ; (formData.conditions as any).time_window = {}
-                        }
-                        ; (formData.conditions as any).time_window.start_time = val
-                      }
-                    " />
-                  <el-time-picker :model-value="(formData.conditions as any)?.time_window?.end_time" format="HH:mm"
-                    placeholder="结束时间" style="flex: 1" @update:model-value="
-                      (val: any) => {
-                        if (!formData.conditions) formData.conditions = {}
-                        if (!(formData.conditions as any).time_window) {
-                          ; (formData.conditions as any).time_window = {}
-                        }
-                        ; (formData.conditions as any).time_window.end_time = val
-                      }
-                    " />
+                <div style="display: flex; flex-direction: column; gap: 10px; width: 100%">
+                  <div style="display: flex; gap: 10px">
+                    <el-time-picker v-model="(formData.conditions as any).time_window_start" format="HH:mm"
+                      placeholder="开始" style="flex: 1" />
+                    <el-time-picker v-model="(formData.conditions as any).time_window_end" format="HH:mm"
+                      placeholder="结束" style="flex: 1" />
+                  </div>
+                  <el-select v-model="(formData.conditions as any).time_window_days" multiple placeholder="选择周期"
+                    style="width: 100%">
+                    <el-option v-for="d in 7" :key="d" :label="'周' + d" :value="d" />
+                  </el-select>
                 </div>
               </el-form-item>
+
+              <el-divider content-position="left">安全状态</el-divider>
+              <el-form-item label="检测到异常">
+                <el-switch v-model="(formData.conditions as any).anomaly_detected" />
+              </el-form-item>
             </div>
+
+            <!-- Flow Conditions -->
             <div v-else-if="formData.type === 'flow'" class="conditions-flow">
-              <el-form-item label="功能码熵值">
-                <el-input-number :model-value="(formData.conditions as any)?.trigger_thresholds?.function_code_entropy"
-                  :min="0" :max="1" :step="0.1" style="width: 100%" @update:model-value="
-                    (val: number) => {
-                      if (!formData.conditions) formData.conditions = {}
-                      if (!(formData.conditions as any).trigger_thresholds) {
-                        ; (formData.conditions as any).trigger_thresholds = {}
-                      }
-                      ; (formData.conditions as any).trigger_thresholds.function_code_entropy = val
-                    }
-                  " />
-              </el-form-item>
-              <el-form-item label="持续时间 (秒)">
-                <el-input-number :model-value="(formData.conditions as any)?.trigger_thresholds?.duration_seconds"
-                  :min="0" style="width: 100%" @update:model-value="
-                    (val: number) => {
-                      if (!formData.conditions) formData.conditions = {}
-                      if (!(formData.conditions as any).trigger_thresholds) {
-                        ; (formData.conditions as any).trigger_thresholds = {}
-                      }
-                      ; (formData.conditions as any).trigger_thresholds.duration_seconds = val
-                    }
-                  " />
-              </el-form-item>
-              <el-form-item label="怀疑级别">
-                <el-select v-model="(formData.conditions as any).suspicion_level" placeholder="选择级别"
-                  style="width: 100%">
-                  <el-option label="低" value="low" />
-                  <el-option label="中" value="medium" />
-                  <el-option label="高" value="high" />
-                </el-select>
-              </el-form-item>
+              <el-divider content-position="left">统计特征 (Stats)</el-divider>
+              <div style="display: flex; gap: 10px">
+                <el-form-item label="速率 > (B/s)" style="flex: 1">
+                  <el-input-number v-model="(formData.conditions as any).byte_rate_gt" :min="0" style="width: 100%" />
+                </el-form-item>
+                <el-form-item label="持续 > (s)" style="flex: 1">
+                  <el-input-number v-model="(formData.conditions as any).duration_gt" :min="0" style="width: 100%" />
+                </el-form-item>
+              </div>
+
+              <el-divider content-position="left">内容特征 (Content)</el-divider>
+              <div style="display: flex; gap: 10px">
+                <el-form-item label="功能码熵 >" style="flex: 1">
+                  <el-input-number v-model="(formData.conditions as any).function_code_entropy_gt" :min="0" :max="1"
+                    :step="0.1" style="width: 100%" />
+                </el-form-item>
+                <el-form-item label="异常评分 >" style="flex: 1">
+                  <el-input-number v-model="(formData.conditions as any).payload_anomaly_score_gt" :min="0"
+                    style="width: 100%" />
+                </el-form-item>
+              </div>
+
+              <el-divider content-position="left">状态判定</el-divider>
+              <div style="display: flex; gap: 10px">
+                <el-form-item label="新会话" style="flex: 1">
+                  <el-switch v-model="(formData.conditions as any).is_new_flow" />
+                </el-form-item>
+              </div>
             </div>
           </div>
 
@@ -622,17 +661,120 @@ onMounted(() => {
                 <el-option label="告警" value="alert" />
               </el-select>
             </el-form-item>
+
+            <!-- 主要动作参数 -->
+            <div class="action-params"
+              v-if="formData.actions!.primary_action.action_type !== 'allow' && formData.actions!.primary_action.action_type !== 'block' && formData.actions!.primary_action.action_type !== 'terminate'">
+
+              <!-- Throttle Params -->
+              <template v-if="formData.actions!.primary_action.action_type === 'throttle'">
+                <el-form-item label="带宽 (Mbps)">
+                  <el-input-number v-model="formData.actions!.primary_action.action_params.rate_limit!.bandwidth_mbps"
+                    :min="1" style="width: 100%" />
+                </el-form-item>
+                <el-form-item label="包速率 (PPS)">
+                  <el-input-number
+                    v-model="formData.actions!.primary_action.action_params.rate_limit!.packets_per_second" :min="1"
+                    style="width: 100%" />
+                </el-form-item>
+              </template>
+
+              <!-- Redirect Params -->
+              <template v-if="formData.actions!.primary_action.action_type === 'redirect'">
+                <el-form-item label="目标 (JSON)">
+                  <el-input
+                    :model-value="JSON.stringify(formData.actions!.primary_action.action_params.targets || [], null, 2)"
+                    type="textarea" :rows="3" placeholder='[{"ip": "10.0.0.99", "port": 502}]' @input="(val: string) => {
+                      try {
+                        formData.actions!.primary_action.action_params.targets = JSON.parse(val)
+                      } catch (e) {
+                        // ignore invalid json while typing
+                      }
+                    }" />
+                </el-form-item>
+              </template>
+
+              <!-- Disable Params -->
+              <template v-if="formData.actions!.primary_action.action_type === 'disable'">
+                <el-form-item label="原因">
+                  <el-input v-model="formData.actions!.primary_action.action_params.reason" placeholder="禁用原因" />
+                </el-form-item>
+              </template>
+
+              <!-- Shutdown Params -->
+              <template v-if="formData.actions!.primary_action.action_type === 'shutdown'">
+                <el-form-item label="通知消息">
+                  <el-input v-model="formData.actions!.primary_action.action_params.notice" placeholder="关闭前的通知消息" />
+                </el-form-item>
+              </template>
+
+              <!-- Alert Params -->
+              <template v-if="formData.actions!.primary_action.action_type === 'alert'">
+                <el-form-item label="告警级别">
+                  <el-select v-model="formData.actions!.primary_action.action_params.alert_level" placeholder="选择级别"
+                    style="width: 100%">
+                    <el-option label="Info" value="info" />
+                    <el-option label="Warning" value="warning" />
+                    <el-option label="High" value="high" />
+                    <el-option label="Critical" value="critical" />
+                  </el-select>
+                </el-form-item>
+              </template>
+            </div>
+
             <el-form-item label="次要动作">
               <div v-for="(action, index) in formData.actions!.secondary_actions" :key="index"
-                class="secondary-action-item">
-                <el-select v-model="action.action_type" placeholder="动作类型" style="width: 150px">
-                  <el-option label="日志" value="log" />
-                  <el-option label="告警" value="alert" />
-                  <el-option label="阻止" value="block" />
-                  <el-option label="重定向" value="redirect" />
-                  <el-option label="限流" value="rate_limit" />
-                </el-select>
-                <el-button link type="danger" @click="removeSecondaryAction(index)">删除</el-button>
+                class="secondary-action-item-container">
+                <div class="secondary-action-item">
+                  <el-select v-model="action.action_type" placeholder="动作类型" style="width: 120px">
+                    <el-option label="日志" value="log" />
+                    <el-option label="告警" value="alert" />
+                    <el-option label="阻止" value="block" />
+                    <el-option label="重定向" value="redirect" />
+                    <el-option label="限流" value="rate_limit" />
+                  </el-select>
+
+                  <!-- Secondary Action Params -->
+                  <div class="secondary-params" style="flex: 1; margin-left: 10px;">
+                    <template v-if="action.action_type === 'log'">
+                      <div style="display: flex; gap: 5px;">
+                        <el-select v-model="action.action_params.log_level" placeholder="级别" style="width: 100px;">
+                          <el-option label="Info" value="info" />
+                          <el-option label="Warn" value="warning" />
+                          <el-option label="Alert" value="alert" />
+                          <el-option label="Error" value="error" />
+                        </el-select>
+                        <el-input v-model="action.action_params.log_message" placeholder="日志消息" style="flex: 1;" />
+                      </div>
+                    </template>
+
+                    <template v-if="action.action_type === 'alert'">
+                      <el-select v-model="action.action_params.alert_level" placeholder="级别" style="width: 100%">
+                        <el-option label="Info" value="info" />
+                        <el-option label="Warning" value="warning" />
+                        <el-option label="High" value="high" />
+                        <el-option label="Critical" value="critical" />
+                      </el-select>
+                    </template>
+
+                    <template v-if="action.action_type === 'block'">
+                      <el-input :model-value="(action.action_params.blocked_protocols || []).join(',')"
+                        placeholder="协议 (逗号分隔)"
+                        @input="(val: string) => action.action_params.blocked_protocols = val.split(',')" />
+                    </template>
+
+                    <template v-if="action.action_type === 'redirect'">
+                      <el-input v-model="action.action_params.redirect_target" placeholder="重定向目标" />
+                    </template>
+
+                    <template v-if="action.action_type === 'rate_limit'">
+                      <el-input-number v-model="action.action_params.bandwidth_mbps" placeholder="Mbps" :min="1"
+                        style="width: 100%" />
+                    </template>
+                  </div>
+
+                  <el-button link type="danger" @click="removeSecondaryAction(index)">删除</el-button>
+                </div>
               </div>
               <el-button link type="primary" @click="addSecondaryAction">+ 添加次要动作</el-button>
             </el-form-item>

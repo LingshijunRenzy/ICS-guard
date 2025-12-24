@@ -101,7 +101,9 @@ def get_current_user(max_age: Optional[int] = 3600) -> Tuple[Optional[User], Opt
 
         # 计算权限集合并缓存到 g 上，避免后续再访问 ORM 关系
         perms: Set[str] = set()
+        roles: Set[str] = set()
         for role in user.roles:
+            roles.add(role.name)
             for perm in role.permissions:
                 perms.add(perm.code)
 
@@ -109,15 +111,40 @@ def get_current_user(max_age: Optional[int] = 3600) -> Tuple[Optional[User], Opt
         g.current_user_id = user.id
         g.current_user_username = user.username
         g.current_user_permissions = perms
+        g.current_user_roles = roles
 
         # 返回的 user 仅用于向后兼容旧代码的身份检查场景
         g.current_user = user
+        g.user = user  # 兼容性：某些代码可能使用 g.user
         return user, None
 
 
 # ---------------------------------------------------------------------------
 # 权限检查装饰器
 # ---------------------------------------------------------------------------
+
+
+def login_required(func):
+    """
+    登录检查装饰器。
+
+    仅检查用户是否已登录且激活，不检查具体权限。
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        user, error = get_current_user()
+
+        if error == "missing_token":
+            return (
+                jsonify({"error": "unauthorized", "message": "Missing or invalid Authorization header"}),
+                401,
+            )
+        if error in ("invalid_token", "inactive_user") or user is None:
+            return jsonify({"error": "forbidden", "message": "Invalid or inactive user"}), 403
+
+        return func(*args, **kwargs)
+
+    return wrapper
 
 
 def require_permissions(*required_permissions: str):
@@ -176,6 +203,7 @@ def require_permissions(*required_permissions: str):
 __all__ = [
     "create_access_token",
     "get_current_user",
+    "login_required",
     "require_permissions",
 ]
 
