@@ -695,35 +695,35 @@ onMounted(() => {
 }
 
 .policy-drawer :deep(.el-drawer__header) {
-  background: rgba(10, 15, 20, 0.9);
+  background: var(--el-bg-color);
   border-bottom: 1px solid var(--el-border-color);
-    color: var(--cyber-text-main);
+  color: var(--el-text-color-primary);
   padding: 20px;
 }
 
 .policy-drawer :deep(.el-drawer__body) {
-  background: var(--cyber-bg);
-  color: var(--cyber-text-main);
+  background: var(--el-bg-color);
+    color: var(--el-text-color-primary);
   padding: 20px;
   overflow-y: auto;
 }
 
 .policy-detail,
 .policy-form {
-  color: var(--cyber-text-main);
+  color: var(--el-text-color-primary);
 }
 
 .detail-section,
 .form-section {
   margin-bottom: 30px;
   padding-bottom: 20px;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+  border-bottom: 1px dashed var(--el-border-color);
 }
 
 .section-title {
   font-size: 1.1rem;
   font-weight: bold;
-  color: var(--cyber-secondary);
+  color: var(--el-color-primary);
   margin-bottom: 15px;
   letter-spacing: 1px;
 }
@@ -736,23 +736,23 @@ onMounted(() => {
 
 .detail-label {
   min-width: 100px;
-  color: var(--cyber-text-sub);
+  color: var(--el-text-color-secondary);
   font-weight: bold;
 }
 
 .detail-value {
   flex: 1;
-  color: #fff;
+  color: var(--el-text-color-primary);
 }
 
 .json-preview {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--el-fill-color-light);
   border: 1px solid var(--el-border-color);
   padding: 15px;
   border-radius: 4px;
-  font-family: '0xProto Nerd Font', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.9rem;
-  color: var(--cyber-secondary);
+  color: var(--el-text-color-regular);
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;
@@ -768,8 +768,8 @@ onMounted(() => {
   align-items: center;
   margin-bottom: 10px;
   padding: 10px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--el-fill-color-lighter);
+    border: 1px solid var(--el-border-color);
 }
 
 .drawer-actions {
@@ -783,12 +783,54 @@ onMounted(() => {
 
 .form-hint {
   font-size: 0.85rem;
+  color: var(--el-text-color-secondary);
+    margin-top: 5px;
+  }
+  
+  /* Dark mode overrides to maintain Cyberpunk style */
+  :global(.dark) .policy-drawer :deep(.el-drawer__header) {
+    background: rgba(10, 15, 20, 0.9);
+    color: var(--cyber-text-main);
+  }
+  
+  :global(.dark) .policy-drawer :deep(.el-drawer__body) {
+    background: var(--cyber-bg);
+    color: var(--cyber-text-main);
+  }
+  
+  :global(.dark) .detail-section,
+  :global(.dark) .form-section {
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+  }
+  
+  :global(.dark) .section-title {
+    color: var(--cyber-secondary);
+  }
+  
+  :global(.dark) .detail-label {
+    color: var(--cyber-text-sub);
+  }
+  
+  :global(.dark) .detail-value {
+    color: #fff;
+  }
+  
+  :global(.dark) .json-preview {
+    background: rgba(0, 0, 0, 0.3);
+    color: var(--cyber-secondary);
+  }
+  
+  :global(.dark) .secondary-action-item {
+    background: var(--cyber-row-hover);
+    border: 1px solid var(--cyber-table-border);
+  }
+  
+  :global(.dark) .form-hint {
   color: var(--cyber-text-sub);
-  margin-top: 5px;
 }
 
-/* 修复表格斑马纹背景色过亮的问题 */
+/* 修复表格斑马纹背景色 */
 :deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--cyber-row-hover);
 }
 </style>

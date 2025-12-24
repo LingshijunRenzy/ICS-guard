@@ -714,7 +714,8 @@ const updateFlowAnimations = () => {
       // 寻找路径中最后一个 switch 节点
       let stopIndex = -1
       for (let i = anim.path.length - 1; i >= 0; i--) {
-        if (anim.path[i].data.type.toLowerCase() === 'switch') {
+        const node = anim.path[i]
+        if (node && node.data.type.toLowerCase() === 'switch') {
           stopIndex = i
           break
         }
@@ -732,7 +733,7 @@ const updateFlowAnimations = () => {
         // 允许一点误差，或者直接判断是否超过
         if (anim.progress >= targetProgress) {
           shouldStop = true
-          stopNode = anim.path[stopIndex]
+          stopNode = anim.path[stopIndex] || null
         }
       } else {
         // 没有 switch 节点，在 50% 处拦截
