@@ -51,26 +51,30 @@ def create_block_policy(token):
     url = f"{BASE_URL}/policies"
     headers = {"Authorization": f"Bearer {token}"}
     
-    # 定义策略：禁止 HMI1 (10.0.0.10) -> PLC1 (10.0.1.10) 的 ICMP (Ping) 流量
+    # 定义策略：使用高级访问控制 (ACL) 隔离 HMI1
+    # 目标: 00:00:00:00:00:01 (HMI1)
+    # 条件: denied_ips = ["*.*.*.*"] (拒绝所有 IP 通信)
     policy = {
         "policy": {
-            "name": "Block HMI to PLC Ping",
+            "name": "Isolate HMI1 (ACL)",
             "priority": 100,
-            "action": "deny",
+            "action": "block", # UI 使用 block, 控制器映射为 drop
             "status": "active",
+            "scope": {
+                "target_id": "00:00:00:00:00:01",
+                "target_type": "device"
+            },
             "conditions": {
-                "src_ip": "10.0.0.10",
-                "dst_ip": "10.0.1.10",
-                "protocol": "ICMP" 
+                "denied_ips": ["*.*.*.*"]
             }
         }
     }
     
     response = requests.post(url, headers=headers, json=policy)
-    if response.status_code == 200:
+    if response.status_code in [200, 201]:
         policy_id = response.json().get('policy_id')
         print(f"\n[+] 策略已创建! ID: {policy_id}")
-        print(f"    内容: 禁止 10.0.0.10 -> 10.0.1.10 的 ICMP 流量")
+        print(f"    内容: 隔离主机 00:00:00:00:00:01 (拒绝所有 IP 通信)")
         return policy_id
     else:
         print(f"[-] 创建策略失败: {response.text}")
@@ -103,16 +107,16 @@ def main():
     if not policy_id:
         return
 
-    print("\n>>> 请现在去 Mininet 终端执行: hmi1 ping -c 3 plc1")
-    print(">>> 预期结果: Ping 应该失败 (100% packet loss)")
+    print("\n[!] 请在 Mininet 终端中执行以下测试:")
+    print("    1. 验证阻断: hmi1 ping -c 3 plc1 (预期: 100% packet loss)")
+    print("    2. 验证正常: hmi1 ping -c 3 hmi2 (预期: 0% packet loss)")
     
-    input("\n按 Enter 键删除策略并恢复通信...")
+    input("\n[?] 测试完成后，按回车键删除策略并恢复网络...")
 
     # 3. 删除策略
     delete_policy(token, policy_id)
-    
-    print("\n>>> 请再次去 Mininet 终端执行: hmi1 ping -c 3 plc1")
-    print(">>> 预期结果: Ping 应该成功 (0% packet loss)")
+    print("[+] 策略已清除，网络应恢复正常。")
+    print("    验证恢复: hmi1 ping -c 3 plc1 (预期: 0% packet loss)")
 
 if __name__ == "__main__":
     main()

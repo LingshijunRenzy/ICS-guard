@@ -166,6 +166,9 @@ def update_policy(policy_id: str):
         raise
 
 
+
+
+
 @bp.delete("/<string:policy_id>")
 @require_permissions("policy:write")
 def delete_policy(policy_id: str):

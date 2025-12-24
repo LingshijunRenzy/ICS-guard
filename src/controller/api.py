@@ -262,6 +262,7 @@ class SDNControllerAPI(ControllerBase):
         
         try:
             body = req.json if req.body else {}
+            self.sdn_controller.logger.info("API DEBUG: Received policy body: %s", body)
             policy_data = body.get('policy')
             if not policy_data:
                 raise ValueError("Missing policy data")
