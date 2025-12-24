@@ -46,6 +46,44 @@ onMounted(async () => {
   </el-card>
 </template>
 
-<style scoped></style>
+<style scoped>
+/* Card 样式适配 */
+:deep(.el-card) {
+  background-color: rgba(0, 20, 40, 0.6);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: var(--cyber-text);
+}
+
+:deep(.el-card__header) {
+  border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+}
+
+/* Descriptions 样式适配 */
+:deep(.el-descriptions__body) {
+  background-color: transparent;
+  color: var(--cyber-text);
+}
+
+:deep(.el-descriptions__label) {
+  background-color: rgba(0, 0, 0, 0.3) !important;
+  color: var(--cyber-primary) !important;
+  font-weight: bold;
+}
+
+:deep(.el-descriptions__content) {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: var(--cyber-text) !important;
+}
+
+:deep(.el-descriptions__table) {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 骨架屏样式适配 */
+:deep(.el-skeleton) {
+  --el-skeleton-color: rgba(255, 255, 255, 0.1);
+  --el-skeleton-to-color: rgba(255, 255, 255, 0.05);
+}
+</style>
 
 

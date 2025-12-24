@@ -66,6 +66,55 @@ function formatPolicyEffects(effects?: Array<any>): string {
 }
 let ws: WebSocket | null = null
 
+function formatEventContent(row: UiEventItem) {
+  const type = row.type
+  const data = row.data as any
+  if (!data) return '-'
+
+  if (type === 'network_status_update') {
+    return `节点 ${data.node_id} 状态变更为 ${data.status?.toUpperCase()}`
+  }
+  if (type === 'traffic_anomaly') {
+    return `流量 ${data.flow_id} (${data.src_ip} -> ${data.dst_ip}) 异常，分数: ${data.anomaly_score}。详情: ${data.details}`
+  }
+  if (type === 'honeypot_interaction') {
+    return `蜜罐收到来自 ${data.source_ip} 的请求: ${data.request}`
+  }
+  if (type === 'topology_change') {
+    return `拓扑变更: ${data.change_type}`
+  }
+  if (type === 'flow_update') {
+    const f = data.flow || data
+    const src = f.src_ip || f.source || f.src || '?'
+    const dst = f.dst_ip || f.destination || f.dst || '?'
+    const status = f.status || 'unknown'
+    return `Flow ${f.id || f.flow_id} (${src} -> ${dst}) 更新，状态: ${status}`
+  }
+  if (type === 'flow_detection_update') {
+    return `Flow ${data.flow_id} 检测更新: ${data.detect_status} (置信度: ${(data.prob * 100).toFixed(1)}%)`
+  }
+
+  return JSON.stringify(data)
+}
+
+function getEventTypeLabel(type: string) {
+  const map: Record<string, string> = {
+    'network_status_update': '网络状态',
+    'traffic_anomaly': '流量异常',
+    'honeypot_interaction': '蜜罐交互',
+    'topology_change': '拓扑变更',
+    'flow_update': '流量更新',
+    'flow_detection_update': '检测更新'
+  }
+  return map[type] || type
+}
+
+function getEventTypeColor(type: string) {
+  if (type === 'traffic_anomaly' || type === 'honeypot_interaction') return '#FF7C7C'
+  if (type === 'network_status_update' || type === 'topology_change') return '#ffe47c'
+  return '#d0d7de'
+}
+
 function appendEvent(e: UiEventItem) {
   events.push(e)
   if (events.length > 200) {
@@ -187,7 +236,7 @@ onBeforeUnmount(() => {
       </template>
       <el-empty v-if="Object.keys(flows).length === 0" description="当前没有收到任何 Flow 事件" />
       <el-table v-else :data="Object.values(flows).sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1))" size="small"
-        height="260" border>
+        height="260" border stripe>
         <el-table-column prop="flow_id" label="Flow ID" min-width="220">
           <template #default="{ row }">
             <div class="flow-id">{{ row.flow_id }}</div>
@@ -245,12 +294,24 @@ onBeforeUnmount(() => {
       <el-alert v-if="connecting" title="正在连接实时事件通道..." type="info" show-icon class="mb-2" />
       <div v-else>
         <el-empty v-if="events.length === 0" description="当前没有收到任何实时事件" />
-        <el-table v-else :data="events.slice().reverse()" size="small" height="260" border>
-          <el-table-column prop="timestamp" label="时间" width="220" />
-          <el-table-column prop="type" label="事件类型" width="200" />
-          <el-table-column label="详情">
+        <el-table v-else :data="events.slice().reverse()" size="small" height="260" border stripe>
+          <el-table-column label="时间" width="180">
             <template #default="{ row }">
-              <pre class="payload">{{ JSON.stringify(row.data, null, 2) }}</pre>
+              <div class="mono">{{ new Date(row.timestamp).toLocaleString() }}</div>
+            </template>
+          </el-table-column>
+          <el-table-column label="事件类型" width="120">
+            <template #default="{ row }">
+              <span class="cli-tag" :style="{ backgroundColor: getEventTypeColor(row.type), color: '#000000' }">
+                {{ getEventTypeLabel(row.type) }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="内容">
+            <template #default="{ row }">
+              <div class="event-content" :title="JSON.stringify(row.data, null, 2)">
+                {{ formatEventContent(row) }}
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -260,6 +321,58 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.event-content {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: '0xProto Nerd Font', monospace;
+  font-size: 12px;
+}
+
+/* 覆盖 Element Plus 表格样式，适配暗色主题 */
+:deep(.el-table) {
+  background-color: transparent;
+  color: var(--cyber-text);
+  --el-table-header-bg-color: rgba(0, 0, 0, 0.3);
+  --el-table-border-color: rgba(255, 255, 255, 0.1);
+  --el-table-tr-bg-color: transparent;
+}
+
+:deep(.el-table__inner-wrapper::before) {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+:deep(.el-table th.el-table__cell) {
+  background-color: rgba(0, 0, 0, 0.3);
+  color: var(--cyber-primary);
+  font-weight: bold;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+:deep(.el-table td.el-table__cell) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* 斑马纹样式 */
+:deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Hover 样式 */
+:deep(.el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell) {
+  background-color: rgba(0, 240, 255, 0.1);
+}
+
+/* Card 样式适配 */
+:deep(.el-card) {
+  background-color: rgba(0, 20, 40, 0.6);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: var(--cyber-text);
+}
+
+:deep(.el-card__header) {
+  border-bottom: 1px solid rgba(0, 240, 255, 0.3);
+}
 .monitor-layout {
   display: flex;
   flex-direction: column;

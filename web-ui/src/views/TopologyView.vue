@@ -38,6 +38,9 @@ interface FlowAnimation {
   progress: number
   startTime: number
   duration: number
+  blocked?: boolean
+  blockedLabel?: THREE.Sprite
+  glitchStartTime?: number
 }
 
 const loading = ref(false)
@@ -589,20 +592,43 @@ const findPath = (sourceId: string, targetId: string): NodeObject[] | null => {
   return null
 }
 
-const createFlowAnimation = (sourceId: string, targetId: string): void => {
+const createFlowAnimation = (sourceId: string, targetId: string, pathHops?: any[], blocked?: boolean): void => {
   const sourceNode = nodeObjects.get(sourceId)
   const targetNode = nodeObjects.get(targetId)
 
   if (!sourceNode || !targetNode) return
 
-  const path = findPath(sourceId, targetId)
+  let path: NodeObject[] | null = null
+
+  if (pathHops && pathHops.length > 0) {
+    // 尝试使用 path_hops 构建路径
+    const hopPath: NodeObject[] = []
+    
+    for (const hop of pathHops) {
+      const nodeId = hop.node_id
+      const node = nodeObjects.get(nodeId)
+      if (node) {
+        hopPath.push(node)
+      }
+    }
+
+    if (hopPath.length > 0) {
+      path = hopPath
+    }
+  }
+
+  // 如果没有 path_hops 或构建失败，回退到 BFS 寻路
+  if (!path || path.length < 2) {
+    path = findPath(sourceId, targetId)
+  }
+  
   if (!path || path.length < 2) return
 
   const flowId = `flow_${Date.now()}_${Math.random()}`
   const flowSize = CONFIG.nodeSize * 0.1
   const flowGeo = new THREE.BoxGeometry(flowSize, flowSize, flowSize)
   const flowMat = new THREE.MeshBasicMaterial({
-    color: 0xffffff,
+    color: 0xffffff, // 恢复默认白色，不因 blocked 变色
     transparent: true,
     opacity: 0.9
   })
@@ -619,19 +645,57 @@ const createFlowAnimation = (sourceId: string, targetId: string): void => {
     path,
     progress: 0,
     startTime: Date.now(),
-    duration
+    duration,
+    blocked
   }
 
   flowAnimations.set(flowId, animation)
 
-  setTimeout(() => {
-    if (flowMesh && flowMesh.parent) {
-      scene.remove(flowMesh)
-      if (flowMesh.geometry) flowMesh.geometry.dispose()
-      if (flowMesh.material) flowMesh.material.dispose()
-    }
-    flowAnimations.delete(flowId)
-  }, duration)
+  // 如果被阻断，不需要自动销毁，由 updateFlowAnimations 控制
+  if (!blocked) {
+    setTimeout(() => {
+      if (flowMesh && flowMesh.parent) {
+        scene.remove(flowMesh)
+        if (flowMesh.geometry) flowMesh.geometry.dispose()
+        if (flowMesh.material) flowMesh.material.dispose()
+      }
+      flowAnimations.delete(flowId)
+    }, duration)
+  }
+}
+
+const createBlockedLabel = (position: THREE.Vector3): THREE.Sprite => {
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    canvas.width = 512
+    canvas.height = 128
+    
+    // 正红色背景
+    ctx.fillStyle = '#FF0000'
+    ctx.fillRect(0, 0, 512, 128)
+    
+    // 文字
+    ctx.font = 'bold 64px "0xProto Nerd Font", monospace'
+    ctx.fillStyle = '#000000'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('BLOCKED!', 256, 64)
+
+    const texture = new THREE.CanvasTexture(canvas)
+    const spriteMat = new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false
+    })
+    const sprite = new THREE.Sprite(spriteMat)
+    sprite.position.copy(position)
+    sprite.position.y += 40 // 悬浮在上方
+    sprite.scale.set(120, 30, 1)
+    return sprite
+  }
+  return new THREE.Sprite()
 }
 
 const updateFlowAnimations = () => {
@@ -645,7 +709,82 @@ const updateFlowAnimations = () => {
     const elapsed = now - anim.startTime
     anim.progress = Math.min(1, elapsed / anim.duration)
 
-    if (anim.progress >= 1) {
+    // 如果被阻断且到达终点（或接近终点）
+    if (anim.blocked) {
+      // 寻找路径中最后一个 switch 节点
+      let stopIndex = -1
+      for (let i = anim.path.length - 1; i >= 0; i--) {
+        if (anim.path[i].data.type.toLowerCase() === 'switch') {
+          stopIndex = i
+          break
+        }
+      }
+
+      let shouldStop = false
+      let stopNode: NodeObject | null = null
+
+      if (stopIndex !== -1) {
+        // 存在 switch 节点，计算到达该节点的进度
+        // 路径总段数 = path.length - 1
+        // 到达 stopIndex 节点的段数 = stopIndex
+        const targetProgress = stopIndex / (anim.path.length - 1)
+        
+        // 允许一点误差，或者直接判断是否超过
+        if (anim.progress >= targetProgress) {
+          shouldStop = true
+          stopNode = anim.path[stopIndex]
+        }
+      } else {
+        // 没有 switch 节点，在 50% 处拦截
+        if (anim.progress >= 0.5) {
+          shouldStop = true
+          // 计算 50% 处的坐标作为停止点
+          // 这里简单处理：直接使用当前位置作为停止点
+        }
+      }
+
+      if (shouldStop) {
+        if (!anim.blockedLabel) {
+          // 确定标签显示位置
+          let labelPos: THREE.Vector3
+          if (stopNode) {
+            labelPos = new THREE.Vector3(stopNode.x, 0, stopNode.y)
+          } else {
+            labelPos = anim.mesh.position.clone()
+          }
+
+          const label = createBlockedLabel(labelPos)
+          scene.add(label)
+          anim.blockedLabel = label
+          
+          // 立即隐藏 Flow Mesh
+          anim.mesh.visible = false
+
+          // 停止动画并保持一段时间后移除
+          setTimeout(() => {
+            if (anim.mesh && anim.mesh.parent) {
+              scene.remove(anim.mesh)
+              anim.mesh.geometry.dispose()
+              if (Array.isArray(anim.mesh.material)) {
+                anim.mesh.material.forEach(m => m.dispose())
+              } else {
+                anim.mesh.material.dispose()
+              }
+            }
+            if (anim.blockedLabel) {
+              scene.remove(anim.blockedLabel)
+              anim.blockedLabel.material.map?.dispose()
+              anim.blockedLabel.material.dispose()
+            }
+            flowAnimations.delete(anim.id)
+          }, 1000) // 停留1秒展示 BLOCKED
+        }
+        
+        return
+      }
+    }
+
+    if (anim.progress >= 1 && !anim.blocked) {
       return
     }
 
@@ -706,12 +845,20 @@ const connectWebSocket = () => {
         if (eventType.includes('flow') || eventType.includes('traffic') || eventType.includes('packet')) {
           let sourceId = eventData.source || eventData.src || eventData.from
           let targetId = eventData.target || eventData.dst || eventData.to
+          let pathHops = eventData.path_hops
+          let blocked = eventData.blocked
 
           // 如果没有直接的节点 ID，尝试从 flow 对象中提取
           if (!sourceId || !targetId) {
             const flow = eventData.flow || eventData
             const srcIp = flow.src_ip || eventData.src_ip
             const dstIp = flow.dst_ip || eventData.dst_ip
+            if (!pathHops) {
+              pathHops = flow.path_hops
+            }
+            if (blocked === undefined) {
+              blocked = flow.blocked
+            }
 
             // 通过 IP 地址查找节点 ID
             if (srcIp) {
@@ -733,7 +880,7 @@ const connectWebSocket = () => {
           }
 
           if (sourceId && targetId && nodeObjects.has(sourceId) && nodeObjects.has(targetId)) {
-            createFlowAnimation(sourceId, targetId)
+            createFlowAnimation(sourceId, targetId, pathHops, blocked)
           }
         }
       }

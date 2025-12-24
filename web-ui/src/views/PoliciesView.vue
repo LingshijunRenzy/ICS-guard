@@ -195,7 +195,7 @@ const handleApply = async (policy: PolicySummary) => {
         inputValue: JSON.stringify({ target_nodes: [], target_links: [], target_flows: [] }, null, 2),
       }
     )
-    const targetsObj = JSON.parse(value)
+    const targetsObj = JSON.parse(targets)
     await applyPolicy(policy.id, targetsObj)
     ElMessage.success('策略已应用')
   } catch (e: any) {
@@ -218,7 +218,7 @@ const handleRevoke = async (policy: PolicySummary) => {
         inputValue: JSON.stringify({ target_nodes: [], target_links: [], target_flows: [] }, null, 2),
       }
     )
-    const targetsObj = JSON.parse(value)
+    const targetsObj = JSON.parse(targets)
     await revokePolicy(policy.id, targetsObj)
     ElMessage.success('策略已撤销')
   } catch (e: any) {
@@ -285,12 +285,7 @@ onMounted(() => {
           <el-option label="禁用" value="inactive" />
           <el-option label="待定" value="pending" />
         </el-select>
-        <el-input
-          v-model="searchText"
-          placeholder="搜索 ID 或名称"
-          style="width: 200px"
-          clearable
-        />
+        <el-input v-model="searchText" placeholder="搜索 ID 或名称" style="width: 200px" clearable />
       </div>
       <div class="toolbar-right">
         <el-button type="primary" @click="openDrawer('create')">+ 新建策略</el-button>
@@ -299,16 +294,11 @@ onMounted(() => {
 
     <!-- 策略列表 -->
     <div class="policies-table cyber-border">
-      <el-table
-        v-loading="loading"
-        :data="filteredPolicies"
-        stripe
-        style="width: 100%"
-        :row-class-name="() => 'cyber-table-row'"
-      >
+      <el-table v-loading="loading" :data="filteredPolicies" stripe style="width: 100%"
+        :row-class-name="() => 'cyber-table-row'">
         <el-table-column prop="id" label="ID" width="180" />
         <el-table-column prop="name" label="名称" min-width="200" />
-        <el-table-column prop="type" label="类型" width="100">
+        <el-table-column prop="type" label="类型" width="200">
           <template #default="{ row }">
             <span class="type-badge" :class="row.type">{{ row.type.toUpperCase() }}</span>
           </template>
@@ -327,12 +317,7 @@ onMounted(() => {
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openDrawer('view', row.id)">查看</el-button>
             <el-button link type="primary" size="small" @click="openDrawer('edit', row.id)">编辑</el-button>
-            <el-button
-              link
-              type="primary"
-              size="small"
-              @click="toggleStatus(row)"
-            >
+            <el-button link type="primary" size="small" @click="toggleStatus(row)">
               {{ row.status === 'active' ? '禁用' : '启用' }}
             </el-button>
             <el-button link type="primary" size="small" @click="handleApply(row)">应用</el-button>
@@ -343,13 +328,9 @@ onMounted(() => {
     </div>
 
     <!-- 右侧抽屉 -->
-    <el-drawer
-      v-model="drawerVisible"
-      :title="drawerMode === 'create' ? '创建策略' : drawerMode === 'edit' ? '编辑策略' : '策略详情'"
-      direction="rtl"
-      size="600px"
-      class="policy-drawer"
-    >
+    <el-drawer v-model="drawerVisible"
+      :title="drawerMode === 'create' ? '创建策略' : drawerMode === 'edit' ? '编辑策略' : '策略详情'" direction="rtl" size="600px"
+      class="policy-drawer">
       <div v-if="drawerMode === 'view' && currentPolicy" class="policy-detail">
         <div class="detail-section">
           <div class="section-title">基本信息</div>
@@ -427,12 +408,7 @@ onMounted(() => {
               <el-input v-model="formData.name" placeholder="策略名称" />
             </el-form-item>
             <el-form-item label="描述">
-              <el-input
-                v-model="formData.description"
-                type="textarea"
-                :rows="3"
-                placeholder="策略描述"
-              />
+              <el-input v-model="formData.description" type="textarea" :rows="3" placeholder="策略描述" />
             </el-form-item>
             <el-form-item label="类型" required>
               <el-select v-model="formData.type" placeholder="选择类型" style="width: 100%">
@@ -469,39 +445,17 @@ onMounted(() => {
               </el-select>
             </el-form-item>
             <el-form-item label="目标标识" required>
-              <el-select
-                v-if="formData.scope!.target_type === 'device'"
-                v-model="formData.scope!.target_identifier"
-                placeholder="选择设备"
-                filterable
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="node in topology.nodes"
-                  :key="node.id"
-                  :label="`${node.name} (${node.id})`"
-                  :value="node.id"
-                />
+              <el-select v-if="formData.scope!.target_type === 'device'" v-model="formData.scope!.target_identifier"
+                placeholder="选择设备" filterable style="width: 100%">
+                <el-option v-for="node in topology.nodes" :key="node.id" :label="`${node.name} (${node.id})`"
+                  :value="node.id" />
               </el-select>
-              <el-select
-                v-else-if="formData.scope!.target_type === 'connection'"
-                v-model="formData.scope!.target_identifier"
-                placeholder="选择连接"
-                filterable
-                style="width: 100%"
-              >
-                <el-option
-                  v-for="link in topology.links"
-                  :key="link.id"
-                  :label="`${link.id} (${link.source} -> ${link.target})`"
-                  :value="link.id"
-                />
+              <el-select v-else-if="formData.scope!.target_type === 'connection'"
+                v-model="formData.scope!.target_identifier" placeholder="选择连接" filterable style="width: 100%">
+                <el-option v-for="link in topology.links" :key="link.id"
+                  :label="`${link.id} (${link.source} -> ${link.target})`" :value="link.id" />
               </el-select>
-              <el-input
-                v-else
-                v-model="formData.scope!.target_identifier"
-                placeholder="输入标识符（如协议名、IP段等）"
-              />
+              <el-input v-else v-model="formData.scope!.target_identifier" placeholder="输入标识符（如协议名、IP段等）" />
             </el-form-item>
           </div>
 
@@ -510,174 +464,126 @@ onMounted(() => {
             <div class="section-title">条件配置</div>
             <div v-if="formData.type === 'node'" class="conditions-node">
               <el-form-item label="允许IP">
-                <el-input
-                  :model-value="
-                    Array.isArray((formData.conditions as any)?.allowed_ips)
-                      ? (formData.conditions as any).allowed_ips.join(', ')
-                      : ''
-                  "
-                  placeholder="逗号分隔的IP地址，如: 192.168.1.10, 192.168.1.20"
-                  @input="
+                <el-input :model-value="Array.isArray((formData.conditions as any)?.allowed_ips)
+                    ? (formData.conditions as any).allowed_ips.join(', ')
+                    : ''
+                  " placeholder="逗号分隔的IP地址，如: 192.168.1.10, 192.168.1.20" @input="
                     (val: string) => {
                       if (!formData.conditions) formData.conditions = {}
-                      ;(formData.conditions as any).allowed_ips = val
-                        .split(',')
-                        .map((s: string) => s.trim())
-                        .filter(Boolean)
+                        ; (formData.conditions as any).allowed_ips = val
+                          .split(',')
+                          .map((s: string) => s.trim())
+                          .filter(Boolean)
                     }
-                  "
-                />
+                  " />
               </el-form-item>
               <el-form-item label="拒绝IP">
-                <el-input
-                  :model-value="
-                    Array.isArray((formData.conditions as any)?.denied_ips)
-                      ? (formData.conditions as any).denied_ips.join(', ')
-                      : ''
-                  "
-                  placeholder="逗号分隔的IP地址，如: 192.168.1.30"
-                  @input="
+                <el-input :model-value="Array.isArray((formData.conditions as any)?.denied_ips)
+                    ? (formData.conditions as any).denied_ips.join(', ')
+                    : ''
+                  " placeholder="逗号分隔的IP地址，如: 192.168.1.30" @input="
                     (val: string) => {
                       if (!formData.conditions) formData.conditions = {}
-                      ;(formData.conditions as any).denied_ips = val
-                        .split(',')
-                        .map((s: string) => s.trim())
-                        .filter(Boolean)
+                        ; (formData.conditions as any).denied_ips = val
+                          .split(',')
+                          .map((s: string) => s.trim())
+                          .filter(Boolean)
                     }
-                  "
-                />
+                  " />
               </el-form-item>
               <el-form-item label="CPU阈值 (%)">
-                <el-input-number
-                  :model-value="(formData.conditions as any)?.trigger_thresholds?.cpu_usage_percent"
-                  :min="0"
-                  :max="100"
-                  style="width: 100%"
-                  @update:model-value="
-                    (val) => {
+                <el-input-number :model-value="(formData.conditions as any)?.trigger_thresholds?.cpu_usage_percent"
+                  :min="0" :max="100" style="width: 100%" @update:model-value="
+                    (val: number) => {
                       if (!formData.conditions) formData.conditions = {}
                       if (!(formData.conditions as any).trigger_thresholds) {
-                        ;(formData.conditions as any).trigger_thresholds = {}
+                        ; (formData.conditions as any).trigger_thresholds = {}
                       }
-                      ;(formData.conditions as any).trigger_thresholds.cpu_usage_percent = val
+                      ; (formData.conditions as any).trigger_thresholds.cpu_usage_percent = val
                     }
-                  "
-                />
+                  " />
               </el-form-item>
               <el-form-item label="内存阈值 (%)">
-                <el-input-number
-                  :model-value="(formData.conditions as any)?.trigger_thresholds?.memory_usage_percent"
-                  :min="0"
-                  :max="100"
-                  style="width: 100%"
-                  @update:model-value="
-                    (val) => {
+                <el-input-number :model-value="(formData.conditions as any)?.trigger_thresholds?.memory_usage_percent"
+                  :min="0" :max="100" style="width: 100%" @update:model-value="
+                    (val: number) => {
                       if (!formData.conditions) formData.conditions = {}
                       if (!(formData.conditions as any).trigger_thresholds) {
-                        ;(formData.conditions as any).trigger_thresholds = {}
+                        ; (formData.conditions as any).trigger_thresholds = {}
                       }
-                      ;(formData.conditions as any).trigger_thresholds.memory_usage_percent = val
+                      ; (formData.conditions as any).trigger_thresholds.memory_usage_percent = val
                     }
-                  "
-                />
+                  " />
               </el-form-item>
             </div>
             <div v-else-if="formData.type === 'connection'" class="conditions-connection">
               <el-form-item label="允许协议">
-                <el-input
-                  :model-value="
-                    Array.isArray((formData.conditions as any)?.allowed_protocols)
-                      ? (formData.conditions as any).allowed_protocols.join(', ')
-                      : ''
-                  "
-                  placeholder="逗号分隔的协议名，如: modbus, http"
-                  @input="
+                <el-input :model-value="Array.isArray((formData.conditions as any)?.allowed_protocols)
+                    ? (formData.conditions as any).allowed_protocols.join(', ')
+                    : ''
+                  " placeholder="逗号分隔的协议名，如: modbus, http" @input="
                     (val: string) => {
                       if (!formData.conditions) formData.conditions = {}
-                      ;(formData.conditions as any).allowed_protocols = val
-                        .split(',')
-                        .map((s: string) => s.trim())
-                        .filter(Boolean)
+                        ; (formData.conditions as any).allowed_protocols = val
+                          .split(',')
+                          .map((s: string) => s.trim())
+                          .filter(Boolean)
                     }
-                  "
-                />
+                  " />
               </el-form-item>
               <el-form-item label="时间窗口">
                 <div style="display: flex; gap: 10px">
-                  <el-time-picker
-                    :model-value="(formData.conditions as any)?.time_window?.start_time"
-                    format="HH:mm"
-                    placeholder="开始时间"
-                    style="flex: 1"
-                    @update:model-value="
-                      (val) => {
+                  <el-time-picker :model-value="(formData.conditions as any)?.time_window?.start_time" format="HH:mm"
+                    placeholder="开始时间" style="flex: 1" @update:model-value="
+                      (val: any) => {
                         if (!formData.conditions) formData.conditions = {}
                         if (!(formData.conditions as any).time_window) {
-                          ;(formData.conditions as any).time_window = {}
+                          ; (formData.conditions as any).time_window = {}
                         }
-                        ;(formData.conditions as any).time_window.start_time = val
+                        ; (formData.conditions as any).time_window.start_time = val
                       }
-                    "
-                  />
-                  <el-time-picker
-                    :model-value="(formData.conditions as any)?.time_window?.end_time"
-                    format="HH:mm"
-                    placeholder="结束时间"
-                    style="flex: 1"
-                    @update:model-value="
-                      (val) => {
+                    " />
+                  <el-time-picker :model-value="(formData.conditions as any)?.time_window?.end_time" format="HH:mm"
+                    placeholder="结束时间" style="flex: 1" @update:model-value="
+                      (val: any) => {
                         if (!formData.conditions) formData.conditions = {}
                         if (!(formData.conditions as any).time_window) {
-                          ;(formData.conditions as any).time_window = {}
+                          ; (formData.conditions as any).time_window = {}
                         }
-                        ;(formData.conditions as any).time_window.end_time = val
+                        ; (formData.conditions as any).time_window.end_time = val
                       }
-                    "
-                  />
+                    " />
                 </div>
               </el-form-item>
             </div>
             <div v-else-if="formData.type === 'flow'" class="conditions-flow">
               <el-form-item label="功能码熵值">
-                <el-input-number
-                  :model-value="(formData.conditions as any)?.trigger_thresholds?.function_code_entropy"
-                  :min="0"
-                  :max="1"
-                  :step="0.1"
-                  style="width: 100%"
-                  @update:model-value="
-                    (val) => {
+                <el-input-number :model-value="(formData.conditions as any)?.trigger_thresholds?.function_code_entropy"
+                  :min="0" :max="1" :step="0.1" style="width: 100%" @update:model-value="
+                    (val: number) => {
                       if (!formData.conditions) formData.conditions = {}
                       if (!(formData.conditions as any).trigger_thresholds) {
-                        ;(formData.conditions as any).trigger_thresholds = {}
+                        ; (formData.conditions as any).trigger_thresholds = {}
                       }
-                      ;(formData.conditions as any).trigger_thresholds.function_code_entropy = val
+                      ; (formData.conditions as any).trigger_thresholds.function_code_entropy = val
                     }
-                  "
-                />
+                  " />
               </el-form-item>
               <el-form-item label="持续时间 (秒)">
-                <el-input-number
-                  :model-value="(formData.conditions as any)?.trigger_thresholds?.duration_seconds"
-                  :min="0"
-                  style="width: 100%"
-                  @update:model-value="
-                    (val) => {
+                <el-input-number :model-value="(formData.conditions as any)?.trigger_thresholds?.duration_seconds"
+                  :min="0" style="width: 100%" @update:model-value="
+                    (val: number) => {
                       if (!formData.conditions) formData.conditions = {}
                       if (!(formData.conditions as any).trigger_thresholds) {
-                        ;(formData.conditions as any).trigger_thresholds = {}
+                        ; (formData.conditions as any).trigger_thresholds = {}
                       }
-                      ;(formData.conditions as any).trigger_thresholds.duration_seconds = val
+                      ; (formData.conditions as any).trigger_thresholds.duration_seconds = val
                     }
-                  "
-                />
+                  " />
               </el-form-item>
               <el-form-item label="怀疑级别">
-                <el-select
-                  v-model="(formData.conditions as any).suspicion_level"
-                  placeholder="选择级别"
-                  style="width: 100%"
-                >
+                <el-select v-model="(formData.conditions as any).suspicion_level" placeholder="选择级别"
+                  style="width: 100%">
                   <el-option label="低" value="low" />
                   <el-option label="中" value="medium" />
                   <el-option label="高" value="high" />
@@ -702,7 +608,8 @@ onMounted(() => {
               </el-select>
             </el-form-item>
             <el-form-item label="次要动作">
-              <div v-for="(action, index) in formData.actions!.secondary_actions" :key="index" class="secondary-action-item">
+              <div v-for="(action, index) in formData.actions!.secondary_actions" :key="index"
+                class="secondary-action-item">
                 <el-select v-model="action.action_type" placeholder="动作类型" style="width: 150px">
                   <el-option label="日志" value="log" />
                   <el-option label="告警" value="alert" />
@@ -940,5 +847,10 @@ onMounted(() => {
 
 :deep(.el-button--primary:hover) {
   background: rgba(0, 240, 255, 0.8);
+}
+
+/* 修复表格斑马纹背景色过亮的问题 */
+:deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background: rgba(255, 255, 255, 0.05);
 }
 </style>

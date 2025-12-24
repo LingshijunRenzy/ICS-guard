@@ -93,6 +93,20 @@ async function handleDelete(row: AppUser) {
   await loadData()
 }
 
+const roleColors: Record<string, string> = {
+  admin: '#FF7C7C',
+  operator: '#2DFEFF',
+  viewer: '#ffe47c',
+  default: '#ffffff'
+}
+
+function getRoleStyle(role: string) {
+  return {
+    backgroundColor: roleColors[role] || roleColors.default,
+    color: '#000000'
+  }
+}
+
 onMounted(() => {
   loadData()
 })
@@ -108,22 +122,22 @@ onMounted(() => {
         </div>
       </template>
 
-      <el-table :data="users" v-loading="loading" style="width: 100%">
+      <el-table :data="users" v-loading="loading" style="width: 100%" stripe>
         <el-table-column prop="username" label="用户名" min-width="120" />
         <el-table-column prop="display_name" label="显示名" min-width="120" />
         <el-table-column prop="email" label="邮箱" min-width="160" />
         <el-table-column label="角色" min-width="160">
           <template #default="{ row }">
-            <el-tag v-for="r in row.roles" :key="r" size="small" class="tag">
-              {{ r }}
-            </el-tag>
+            <span v-for="r in row.roles" :key="r" class="cli-tag" :style="getRoleStyle(r)">
+              {{ r.toUpperCase() }}
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.is_active ? 'success' : 'info'" size="small">
-              {{ row.is_active ? '启用' : '停用' }}
-            </el-tag>
+            <span class="cli-tag" :style="{ backgroundColor: row.is_active ? '#7CFF7C' : '#d0d7de', color: '#000000' }">
+              {{ row.is_active ? 'ACTIVE' : 'INACTIVE' }}
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="操作" width="180">
@@ -188,6 +202,61 @@ onMounted(() => {
   font-size: 12px;
   color: #999;
   margin-top: 4px;
+}
+
+.cli-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  font-family: '0xProto Nerd Font', monospace;
+  font-size: 12px;
+  font-weight: bold;
+  margin-right: 4px;
+  border-radius: 0;
+}
+
+/* 覆盖 Element Plus 表格样式，适配暗色主题 */
+:deep(.el-table) {
+  background-color: transparent;
+  color: var(--cyber-text);
+  --el-table-header-bg-color: rgba(0, 0, 0, 0.3);
+  --el-table-border-color: rgba(255, 255, 255, 0.1);
+  --el-table-tr-bg-color: transparent;
+}
+
+:deep(.el-table__inner-wrapper::before) {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+:deep(.el-table th.el-table__cell) {
+  background-color: rgba(0, 0, 0, 0.3);
+  color: var(--cyber-primary);
+  font-weight: bold;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+:deep(.el-table td.el-table__cell) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* 斑马纹样式 */
+:deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Hover 样式 */
+:deep(.el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell) {
+  background-color: rgba(0, 240, 255, 0.1);
+}
+
+/* Card 样式适配 */
+:deep(.el-card) {
+  background-color: rgba(0, 20, 40, 0.6);
+  border: 1px solid rgba(0, 240, 255, 0.3);
+  color: var(--cyber-text);
+}
+
+:deep(.el-card__header) {
+  border-bottom: 1px solid rgba(0, 240, 255, 0.3);
 }
 </style>
 
