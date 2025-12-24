@@ -31,8 +31,9 @@ class NotificationManager:
             # To avoid flooding console with massive JSON, we might want to be concise for flows
             # But user asked to see what is pushed.
             data = payload.get('data', {})
-            flow_id = data.get('flow', {}).get('id', 'unknown')
-            rate = data.get('flow', {}).get('pkt_rate', 0)
+            flow_obj = data.get('flow', {})
+            flow_id = flow_obj.get('flow_id') or flow_obj.get('id', 'unknown')
+            rate = flow_obj.get('pkt_rate', 0)
             self.logger.info(f"PUSH [FLOW] ID={flow_id} Rate={rate:.2f}")
         elif channel in ['node-metrics', 'network-status']:
             # Suppress verbose logs for metrics and status to focus on flows

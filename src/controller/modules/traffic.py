@@ -18,6 +18,7 @@ class TrafficMonitor:
         self.active_flow_data = {} # {flow_id: flow_data_dict}
         self.last_pushed_stats = {} # {ui_flow_id: flow_data_dict}
         self.last_pushed_network_status = {} # {dpid: metrics}
+        self.last_pushed_anomalies = {} # {key: timestamp}
 
     def register_datapath(self, datapath):
         self.datapaths[datapath.id] = datapath
@@ -72,8 +73,9 @@ class TrafficMonitor:
                 
                 delta_time = current_time - prev_time
                 if delta_time > 0:
-                    tx_bandwidth = (tx_bytes - prev_tx) * 8.0 / delta_time
-                    rx_bandwidth = (rx_bytes - prev_rx) * 8.0 / delta_time
+                    # Convert to Mbps
+                    tx_bandwidth = ((tx_bytes - prev_tx) * 8.0 / delta_time) / 1000000.0
+                    rx_bandwidth = ((rx_bytes - prev_rx) * 8.0 / delta_time) / 1000000.0
                     
             self.port_stats[dpid][port_no] = {
                 'tx_bytes': tx_bytes,
@@ -142,6 +144,9 @@ class TrafficMonitor:
         # Dictionary to aggregate flows by (dpid, src_mac, dst_mac) for UI display
         aggregated_stats = {} 
         
+        # Heuristic: Count flows per destination IP to detect SYN Flood / DDoS
+        dst_ip_counts = {} # {dst_ip: count}
+
         for stat in body:
             if stat.priority == 0:
                 continue
@@ -165,6 +170,10 @@ class TrafficMonitor:
             ipv4_src = match.get('ipv4_src')
             ipv4_dst = match.get('ipv4_dst')
             
+            # Heuristic Counting
+            if ipv4_dst:
+                dst_ip_counts[ipv4_dst] = dst_ip_counts.get(ipv4_dst, 0) + 1
+
             src_port = tcp_src if tcp_src else udp_src
             dst_port = tcp_dst if tcp_dst else udp_dst
             protocol = 'TCP' if tcp_src else ('UDP' if udp_src else ('ICMP' if ip_proto == 1 else (str(ip_proto) if ip_proto else None)))
@@ -213,9 +222,19 @@ class TrafficMonitor:
                     'packet_count': 0,
                     'byte_count': 0,
                     'protocol': protocol,
+                    'status': 'active',
                     'timestamp': current_time,
                     'start_time': start_dt.isoformat(),
-                    'end_time': now_dt.isoformat()
+                    'end_time': now_dt.isoformat(),
+                    # New fields for App compatibility
+                    'func_code_entropy': 0.0, # Placeholder
+                    'reg_addr_std': 0.0,      # Placeholder
+                    'policy_effects': [],     # Placeholder
+                    'redirect_to': None,
+                    'final_dst': None,
+                    'blocked': False,
+                    'blocked_at': None,
+                    'block_reason': None
                 }
             
             # Accumulate stats (though for granular flows, this loop usually runs once per ID)
@@ -225,6 +244,26 @@ class TrafficMonitor:
             agg['packet_count'] += stat.packet_count
             agg['byte_count'] += stat.byte_count
             # If multiple protocols exist, we might want to indicate that, but keeping simple for now
+
+        # Check for anomalies (Heuristic)
+        for dst_ip, count in dst_ip_counts.items():
+            if count > 50: # Threshold: >50 concurrent flows to same IP
+                anomaly_key = f"DDoS-{dpid}-{dst_ip}"
+                last_push = self.last_pushed_anomalies.get(anomaly_key, 0)
+                
+                if current_time - last_push > 10.0: # Rate limit: 1 alert per 10s
+                    self.logger.warning(f"Potential DDoS detected: {count} flows -> {dst_ip}")
+                    self.notification.push_traffic_anomaly(
+                        flow_id=anomaly_key,
+                        details={
+                            'type': 'ddos_syn_flood',
+                            'target': dst_ip,
+                            'flow_count': count,
+                            'dpid': str(dpid),
+                            'description': f"High volume of flows ({count}) detected targeting {dst_ip}"
+                        }
+                    )
+                    self.last_pushed_anomalies[anomaly_key] = current_time
 
         # Process Aggregates for Notification
         seen_ui_flows = set(aggregated_stats.keys())
@@ -273,6 +312,7 @@ class TrafficMonitor:
                 stop_data = self.active_flow_data[fid].copy()
                 stop_data['pkt_rate'] = 0.0
                 stop_data['byte_rate'] = 0.0
+                stop_data['status'] = 'inactive'
                 stop_data['timestamp'] = current_time
                 self.notification.push_flow_update(stop_data)
                 del self.active_flow_data[fid]

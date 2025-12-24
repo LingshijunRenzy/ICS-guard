@@ -72,6 +72,21 @@ def main():
     ws1.cmd(f'python3 {traffic_script} http-client --target {web_portal.IP()} --port 80 --interval 5 > /tmp/workstation.log 2>&1 &')
     
     info("[*] 所有流量生成已在后台启动。日志位于 /tmp/*.log\n")
+    
+    info("\n" + "="*60 + "\n")
+    info("   攻击模拟指南 (Attack Simulation Guide)\n")
+    info("="*60 + "\n")
+    info("你可以在 Mininet CLI 中运行以下命令来模拟攻击:\n\n")
+    
+    info("1. SYN Flood (DoS 攻击):\n")
+    info(f"   ws1 python3 {traffic_script} syn-flood --target {web_portal.IP()} --port 80 --count 10000 &\n\n")
+    
+    info("2. Modbus Flood (PLC 拒绝服务):\n")
+    info(f"   hmi2 python3 {traffic_script} modbus-flood --target {plc1.IP()} --port 5020 --count 5000 &\n\n")
+    
+    info("3. Port Scan (侦察扫描):\n")
+    info(f"   historian python3 {traffic_script} port-scan --target {plc1.IP()} --start-port 1 --end-port 1000\n\n")
+    info("="*60 + "\n")
 
     CLI(net)
     net.stop()

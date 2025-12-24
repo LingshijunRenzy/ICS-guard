@@ -94,8 +94,8 @@ class ForwardingEngine:
 
         # Policy Check
         action, reason, action_params = self.policy.check_packet(dpid, src, dst, src_ip, dst_ip, protocol, dst_port)
-        if action == 'drop':
-            self.logger.info("Packet dropped by policy: %s -> %s (%s)", src, dst, reason)
+        if action == 'drop' or action == 'isolate':
+            self.logger.info("Packet %s by policy: %s -> %s (%s)", action, src, dst, reason)
             return
 
         # Forwarding Logic
@@ -137,6 +137,9 @@ class ForwardingEngine:
     def _shortest_path(self, datapath, msg, in_port, src, dst, pkt, policy_action='allow', policy_params=None):
         parser = datapath.ofproto_parser
         src_dpid = datapath.id
+        
+        if policy_action in ['log', 'inspect']:
+             self.logger.info("Packet %s by policy: %s -> %s", policy_action, src, dst)
         
         # Handle Redirect (Change Destination)
         if policy_action == 'redirect' and policy_params:
@@ -283,7 +286,8 @@ class ForwardingEngine:
         
         # Log flow installation for debugging
         if priority > 0: # Don't log table-miss flows
-            self.logger.info("Installing flow on dpid %s: match=%s", datapath.id, match)
+            # self.logger.info("Installing flow on dpid %s: match=%s", datapath.id, match)
+            pass
 
         datapath.send_msg(mod)
 

