@@ -1,3 +1,65 @@
+# ICS-Guard SDN Controller
+
+基于 Ryu 开发的工业控制系统安全 SDN 控制器。
+
+## 环境配置与运行指南
+
+### 1. 系统要求
+- 操作系统: Linux (推荐 Ubuntu 20.04/22.04)
+- Python 版本: 3.8+
+- Mininet: 2.3.0+
+
+### 2. 安装依赖
+
+#### 2.1 系统依赖
+安装 Mininet 和 Open vSwitch：
+```bash
+sudo apt-get update
+sudo apt-get install -y mininet openvswitch-switch
+```
+
+#### 2.2 Python 依赖
+建议使用虚拟环境：
+```bash
+# 创建虚拟环境
+python3 -m venv venv
+source venv/bin/activate
+
+# 安装依赖
+pip install -r requirements.txt
+```
+
+### 3. 运行控制器
+
+在 `src/controller` 目录下运行：
+
+```bash
+# 启动 Ryu 控制器应用
+# 注意：需要同时加载 sdn_controller.py (核心逻辑) 和 api.py (REST API)
+ryu-manager sdn_controller.py api.py
+```
+
+控制器默认监听端口：
+- OpenFlow: 6633 或 6653
+- REST API: 8080 (Ryu 默认)
+
+### 4. 运行 Mininet 仿真
+
+在另一个终端窗口中，运行 Mininet 拓扑脚本：
+
+```bash
+# 进入 mininet 目录
+cd mininet
+
+# 清理旧环境（可选）
+sudo mn -c
+
+# 运行仿真拓扑
+sudo python3 run.py
+```
+
+---
+
 # Ryu SDN 控制器设计文档
 
 ## 1. 概述
