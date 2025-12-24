@@ -4,3 +4,4 @@ src/test/
 **/.vscode/
 **/.cursor/
 local_ws_tests/
+src/app/static/
