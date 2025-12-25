@@ -90,8 +90,8 @@ function formatEventContent(row: UiEventItem) {
     const status = f.status || 'unknown'
     return `Flow ${f.id || f.flow_id} (${src} -> ${dst}) 更新，状态: ${status}`
   }
-  if (type === 'flow_detection_update') {
-    return `Flow ${data.flow_id} 检测更新: ${data.detect_status} (置信度: ${(data.prob * 100).toFixed(1)}%)`
+  if (type === 'flow_detection_result' || type === 'flow_detection_update') {
+    return `Flow ${data.flow_id} 检测结果: ${data.detect_status} (置信度: ${(data.prob * 100).toFixed(1)}%)`
   }
 
   return JSON.stringify(data)
@@ -104,6 +104,7 @@ function getEventTypeLabel(type: string) {
     'honeypot_interaction': '蜜罐交互',
     'topology_change': '拓扑变更',
     'flow_update': '流量更新',
+    'flow_detection_result': '检测结果',
     'flow_detection_update': '检测更新'
   }
   return map[type] || type
@@ -185,7 +186,7 @@ function connect() {
           path_hops: (flow.path_hops as any) ?? existing.path_hops,
           timestamp: data.timestamp,
         }
-      } else if (data.type === 'flow_detection_update') {
+      } else if (data.type === 'flow_detection_result' || data.type === 'flow_detection_update') {
         const d = data.data || {}
         const flowId = d.flow_id as string
         if (!flowId) return
@@ -239,7 +240,7 @@ onBeforeUnmount(() => {
       </template>
       <el-empty v-if="Object.keys(flows).length === 0" description="当前没有收到任何 Flow 事件" />
       <el-table v-else :data="Object.values(flows).sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1))" size="small"
-        height="260" border stripe>
+        style="width: 100%; height: 100%" border stripe>
         <el-table-column prop="flow_id" label="Flow ID" min-width="220">
           <template #default="{ row }">
             <div class="flow-id">{{ row.flow_id }}</div>
@@ -295,9 +296,9 @@ onBeforeUnmount(() => {
         <span>实时事件流（WS）</span>
       </template>
       <el-alert v-if="connecting" title="正在连接实时事件通道..." type="info" show-icon class="mb-2" />
-      <div v-else>
+      <div v-else class="table-wrapper">
         <el-empty v-if="events.length === 0" description="当前没有收到任何实时事件" />
-        <el-table v-else :data="events.slice().reverse()" size="small" height="260" border stripe>
+        <el-table v-else :data="events.slice().reverse()" size="small" style="width: 100%; height: 100%" border stripe>
           <el-table-column label="时间" width="180">
             <template #default="{ row }">
               <div class="mono">{{ new Date(row.timestamp).toLocaleString() }}</div>
@@ -381,12 +382,31 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 16px;
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .events-card,
 .flows-card {
   width: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+:deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.table-wrapper {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .flow-id {

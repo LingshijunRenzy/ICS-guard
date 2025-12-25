@@ -7,3 +7,4 @@ local_ws_tests/
 src/app/static/
 *.db
 *.sqlite3
+.eggs/

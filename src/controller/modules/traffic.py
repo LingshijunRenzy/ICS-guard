@@ -200,6 +200,32 @@ class TrafficMonitor:
             
             self.flow_stats_history[granular_id] = (stat.packet_count, stat.byte_count, current_time)
             
+            # Check if blocked (no output actions) or redirected (set field actions)
+            is_blocked = True
+            redirect_to = None
+            for instr in stat.instructions:
+                if hasattr(instr, 'actions'):
+                    for act in instr.actions:
+                        # If there is any output action, it's not blocked
+                        if hasattr(act, 'type') and act.type == ofproto_v1_3.OFPAT_OUTPUT:
+                            is_blocked = False
+                        
+                        # Check for redirect (SetField eth_dst or ipv4_dst)
+                        if hasattr(act, 'type') and act.type == ofproto_v1_3.OFPAT_SET_FIELD:
+                            # act.field is an OFPMatchField
+                            if hasattr(act.field, 'header'):
+                                # Ryu 4.x+ uses header
+                                field_name = act.field.header.name if hasattr(act.field.header, 'name') else str(act.field.header)
+                            else:
+                                # Older Ryu or different structure
+                                field_name = str(act.field)
+                            
+                            if 'eth_dst' in field_name or 'ipv4_dst' in field_name:
+                                # It's a redirect. Try to extract the value
+                                val = getattr(act.field, 'value', 'unknown')
+                                redirect_to = val
+                if not is_blocked and redirect_to: break
+            
             # Use granular ID for UI as well to show 5-tuple flows
             ui_flow_id = granular_id
             
@@ -230,11 +256,12 @@ class TrafficMonitor:
                     'func_code_entropy': 0.0, # Placeholder
                     'reg_addr_std': 0.0,      # Placeholder
                     'policy_effects': [],     # Placeholder
-                    'redirect_to': None,
-                    'final_dst': None,
-                    'blocked': False,
-                    'blocked_at': None,
-                    'block_reason': None
+                    'redirect_to': redirect_to,
+                    'final_dst': redirect_to,
+                    'blocked': is_blocked,
+                    'blocked_at': now_dt.isoformat() if is_blocked else None,
+                    'block_reason': "Policy Enforcement" if is_blocked else None,
+                    'path_hops': []
                 }
             
             # Accumulate stats (though for granular flows, this loop usually runs once per ID)
@@ -243,7 +270,15 @@ class TrafficMonitor:
             agg['byte_rate'] += byte_rate
             agg['packet_count'] += stat.packet_count
             agg['byte_count'] += stat.byte_count
-            # If multiple protocols exist, we might want to indicate that, but keeping simple for now
+            # Update blocked status if any part of the aggregate is blocked
+            if is_blocked:
+                agg['blocked'] = True
+                if not agg['blocked_at']:
+                    agg['blocked_at'] = datetime.datetime.fromtimestamp(current_time).isoformat()
+                agg['block_reason'] = "Policy Enforcement"
+            if redirect_to:
+                agg['redirect_to'] = redirect_to
+                agg['final_dst'] = redirect_to
 
         # Check for anomalies (Heuristic)
         for dst_ip, count in dst_ip_counts.items():

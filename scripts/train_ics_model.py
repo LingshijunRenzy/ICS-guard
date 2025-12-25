@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """
-训练 LightGBM 流量检测模型：
-- 输入：datasets/ICS-flow/archive/Dataset.csv（可通过 --data-path 覆盖）
+训练 LightGBM 流量检测模型（增强版）：
+- 输入：datasets/processed/merged_training_data.csv
 - 输出：
   models/YYMMDD_HHMMSS_lightgbm_model.pkl
-  models/YYMMDD_HHMMSS_features.json（特征列顺序）
-  models/YYMMDD_HHMMSS_thresholds.json（推理阈值）
-  models/YYMMDD_HHMMSS_metrics.png（训练/验证指标可视化）
+  models/YYMMDD_HHMMSS_features.json
+  models/YYMMDD_HHMMSS_thresholds.json
+  models/YYMMDD_HHMMSS_metrics.png (指标对比)
+  models/YYMMDD_HHMMSS_confusion_matrix.png (混淆矩阵热力图)
+  models/YYMMDD_HHMMSS_feature_importance.png (特征重要性)
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import List, Tuple
@@ -21,69 +24,95 @@ import joblib
 import lightgbm as lgb
 import matplotlib
 import pandas as pd
-from sklearn.metrics import f1_score, roc_auc_score
+import numpy as np
+import seaborn as sns
+from sklearn.metrics import f1_score, roc_auc_score, confusion_matrix
 from sklearn.model_selection import train_test_split
 from sklearn.utils import shuffle
 
-# 使用无界面后端以便脚本运行在服务器/CI
+# 使用无界面后端
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-
-from prepare_ics_flow import build_training_xy, load_raw_ics_flow
-
+import matplotlib.pyplot as plt
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DATA_PATH = ROOT / "datasets" / "ICS-flow" / "archive" / "Dataset.csv"
+DEFAULT_DATA_PATH = ROOT / "datasets" / "processed" / "merged_training_data.csv"
 DEFAULT_OUTPUT_DIR = ROOT / "models"
-
 
 def _prepare_xy(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.Series, List[str]]:
     """
-    构建训练特征与标签，保持与 prepare_ics_flow 一致的预处理。
-    - 标签映射：
-      * 若标签为数值：0 视为 Normal，其余视为 Attack
-      * 若标签为字符串：忽略大小写，"normal" 视为 Normal，其余视为 Attack
-    - 特征：仅使用数值列，缺失填充为 0
+    从合并后的数据集中提取特征和标签。
     """
-    X_raw, y_raw = build_training_xy(df)
-
-    if y_raw.dtype != object:
-        y = (y_raw != 0).astype(int)
+    # 标签列
+    if 'IT_B_Label' in df.columns:
+        y = df['IT_B_Label'].astype(int)
     else:
-        y = (y_raw.astype(str).str.lower() != "normal").astype(int)
+        # 兼容旧格式
+        y = (df['IT_M_Label'].astype(str).str.lower() != "normal").astype(int)
 
-    # 仅保留数值/布尔列，缺失填充 0
-    feature_df = X_raw.select_dtypes(include=["number", "bool"]).copy()
-    feature_df = feature_df.fillna(0)
+    # 排除非特征列
+    drop_cols = ['IT_B_Label', 'IT_M_Label', 'source', 'sAddress', 'rAddress', 'sMACs', 'rMACs', 'sIPs', 'rIPs', 'startDate', 'endDate', 'start', 'end']
+    X = df.drop(columns=[c for c in drop_cols if c in df.columns])
+    
+    # 仅保留数值列
+    X = X.select_dtypes(include=["number", "bool"]).copy()
+    X = X.fillna(0)
 
-    feature_names: List[str] = list(feature_df.columns)
-    return feature_df, y, feature_names
+    feature_names = list(X.columns)
+    return X, y, feature_names
 
+def plot_confusion_matrix(y_true, y_pred, path):
+    plt.figure(figsize=(8, 6))
+    cm = confusion_matrix(y_true, y_pred)
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False)
+    plt.xlabel('Predicted')
+    plt.ylabel('Actual')
+    plt.title('Confusion Matrix')
+    plt.savefig(path, dpi=150)
+    plt.close()
+
+def plot_feature_importance(model, feature_names, path):
+    plt.figure(figsize=(10, 8))
+    importance = pd.DataFrame({
+        'feature': feature_names,
+        'importance': model.feature_importances_
+    }).sort_values(by='importance', ascending=False).head(20)
+    
+    sns.barplot(x='importance', y='feature', data=importance)
+    plt.title('Top 20 Feature Importance')
+    plt.tight_layout()
+    plt.savefig(path, dpi=150)
+    plt.close()
 
 def train_model(
     data_path: Path,
     output_dir: Path,
     test_size: float = 0.2,
     random_state: int = 42,
+    sample_frac: float = 1.0
 ) -> None:
-    df_raw = load_raw_ics_flow() if data_path == DEFAULT_DATA_PATH else pd.read_csv(data_path)
-    df_raw = shuffle(df_raw, random_state=random_state)
-
-    X, y, feature_names = _prepare_xy(df_raw)
-
-    # 数据质量检查：确保存在正负样本
-    class_counts = y.value_counts().to_dict()
-    if y.nunique() < 2:
-        raise ValueError(f"标签仅包含单一类别，无法训练二分类模型：{class_counts}")
+    print(f"[*] Loading data from {data_path}...")
+    # 使用 low_memory=False 避免警告
+    df = pd.read_csv(data_path, low_memory=False)
+    
+    if sample_frac < 1.0:
+        print(f"[*] Sampling {sample_frac*100}% of data...")
+        df = df.sample(frac=sample_frac, random_state=random_state)
+    
+    df = shuffle(df, random_state=random_state)
+    X, y, feature_names = _prepare_xy(df)
+    
+    print(f"[*] Dataset shape: {X.shape}, Features: {len(feature_names)}")
+    print(f"[*] Class distribution: {y.value_counts().to_dict()}")
 
     X_train, X_val, y_train, y_val = train_test_split(
         X, y, test_size=test_size, random_state=random_state, stratify=y
     )
 
+    print("[*] Training LightGBM model...")
     model = lgb.LGBMClassifier(
-        n_estimators=800,
-        learning_rate=0.05,
-        num_leaves=63,
+        n_estimators=1000,
+        learning_rate=0.03,
+        num_leaves=127,
         subsample=0.8,
         colsample_bytree=0.8,
         max_depth=-1,
@@ -91,84 +120,75 @@ def train_model(
         class_weight="balanced",
         random_state=random_state,
         verbosity=-1,
+        n_jobs=-1
     )
 
-    model.fit(X_train, y_train)
+    model.fit(
+        X_train, y_train,
+        eval_set=[(X_val, y_val)],
+        eval_metric='binary_logloss',
+        callbacks=[lgb.early_stopping(stopping_rounds=50)]
+    )
 
-    # 验证集指标
+    # 评估
+    print("[*] Evaluating model...")
     val_probs = model.predict_proba(X_val)[:, 1]
     val_preds = (val_probs >= 0.5).astype(int)
-
-    # 训练集指标（用于对比）
-    train_probs = model.predict_proba(X_train)[:, 1]
-    train_preds = (train_probs >= 0.5).astype(int)
-
+    
+    cm = confusion_matrix(y_val, val_preds)
+    tn, fp, fn, tp = cm.ravel()
+    
     metrics = {
         "roc_auc": float(roc_auc_score(y_val, val_probs)),
         "f1": float(f1_score(y_val, val_preds)),
-        "train_roc_auc": float(roc_auc_score(y_train, train_probs)),
-        "train_f1": float(f1_score(y_train, train_preds)),
+        "precision": float(tp / (tp + fp)) if (tp + fp) > 0 else 0,
+        "recall": float(tp / (tp + fn)) if (tp + fn) > 0 else 0,
     }
+    
+    print(f"[*] Metrics: {json.dumps(metrics, indent=2)}")
 
-    # 阈值可根据验证集后续调优，这里提供与应用层配置一致的初始值
-    thresholds = {
-        "alert": 0.3,
-        "throttle": 0.6,
-        "block": 0.8,
-        "redirect": 0.9,
-    }
-
+    # 保存
     output_dir.mkdir(parents=True, exist_ok=True)
-
     timestamp = datetime.now().strftime("%y%m%d_%H%M%S_")
+    
     model_path = output_dir / f"{timestamp}lightgbm_model.pkl"
     features_path = output_dir / f"{timestamp}features.json"
     thresholds_path = output_dir / f"{timestamp}thresholds.json"
-    metrics_fig_path = output_dir / f"{timestamp}metrics.png"
-
+    
     joblib.dump(model, model_path)
-
     with open(features_path, "w") as f:
-        json.dump(feature_names, f, ensure_ascii=False, indent=2)
-
+        json.dump(feature_names, f, indent=2)
+    
+    # 默认阈值
+    thresholds = {"alert": 0.3, "throttle": 0.6, "block": 0.8, "redirect": 0.9}
     with open(thresholds_path, "w") as f:
-        json.dump(thresholds, f, ensure_ascii=False, indent=2)
+        json.dump(thresholds, f, indent=2)
 
-    # 绘制训练/验证指标对比
-    plt.figure(figsize=(6, 4))
-    names = ["ROC-AUC", "F1"]
-    train_vals = [metrics["train_roc_auc"], metrics["train_f1"]]
-    val_vals = [metrics["roc_auc"], metrics["f1"]]
-    x = range(len(names))
-    plt.bar([i - 0.2 for i in x], train_vals, width=0.4, label="Train")
-    plt.bar([i + 0.2 for i in x], val_vals, width=0.4, label="Validation")
-    plt.xticks(list(x), names)
-    plt.ylim(0, 1.0)
-    plt.ylabel("Score")
-    plt.title("LightGBM Metrics")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig(metrics_fig_path, dpi=150)
+    # 绘图
+    print("[*] Generating plots...")
+    plot_confusion_matrix(y_val, val_preds, output_dir / f"{timestamp}confusion_matrix.png")
+    plot_feature_importance(model, feature_names, output_dir / f"{timestamp}feature_importance.png")
+    
+    # 指标柱状图
+    plt.figure(figsize=(8, 5))
+    m_names = list(metrics.keys())
+    m_values = list(metrics.values())
+    sns.barplot(x=m_names, y=m_values)
+    plt.ylim(0, 1.1)
+    plt.title('Model Performance Metrics')
+    plt.savefig(output_dir / f"{timestamp}metrics.png", dpi=150)
     plt.close()
 
-    print("Train samples:", len(X_train), "Val samples:", len(X_val))
-    print("Metrics:", json.dumps(metrics, ensure_ascii=False, indent=2))
-    print("Saved model to:", model_path)
-    print("Saved features to:", features_path)
-    print("Saved thresholds to:", thresholds_path)
-    print("Saved metrics figure to:", metrics_fig_path)
+    print(f"[+] Training complete. Model saved to {model_path}")
 
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Train LightGBM model for ICS-Guard.")
-    parser.add_argument("--data-path", type=Path, default=DEFAULT_DATA_PATH, help="Dataset CSV path")
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR, help="Output directory for model and metadata")
-    parser.add_argument("--test-size", type=float, default=0.2, help="Validation split ratio")
-    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data-path", type=Path, default=DEFAULT_DATA_PATH)
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--sample", type=float, default=1.0, help="Fraction of data to use (0.0 to 1.0)")
     args = parser.parse_args()
 
-    train_model(args.data_path, args.output_dir, test_size=args.test_size, random_state=args.seed)
-
+    train_model(args.data_path, args.output_dir, sample_frac=args.sample)
 
 if __name__ == "__main__":
     main()

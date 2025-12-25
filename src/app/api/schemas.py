@@ -128,17 +128,33 @@ class ActionParams(TypedDict, total=False):
     pass
 
 
+class RateLimitParams(TypedDict, total=False):
+    bandwidth_mbps: float  # 必填，>0
+    packets_per_second: Optional[int]
+    direction: Optional[str]  # ingress|egress|both
+    burst_packets: Optional[int]
+    burst_bytes: Optional[int]
+    strategy: Optional[str]  # drop|queue
+    smoothing: Optional[str]  # token_bucket|leaky_bucket
+
+
 class LogActionParams(ActionParams):
     log_level: str  # info, warning, alert, error
     log_message: str
 
 
 class ThrottleActionParams(ActionParams):
-    rate_limit: dict  # 包含 bandwidth_mbps, packets_per_second, direction, burst_packets, burst_bytes, strategy, smoothing
+    rate_limit: RateLimitParams
+
+
+class RedirectTarget(TypedDict):
+    ip: str
+    port: int
 
 
 class RedirectActionParams(ActionParams):
-    targets: List[dict]  # [{"ip": "10.0.0.99", "port": 502}]
+    targets: List[RedirectTarget]  # [{"ip": "10.0.0.99", "port": 502}]
+    redirect_target: Optional[str]  # 用于次要动作中的蜜罐标识符
 
 
 class AlertActionParams(ActionParams):

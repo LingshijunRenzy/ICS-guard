@@ -143,4 +143,12 @@ def get_audit_actions():
     """获取所有已记录的动作类型，用于前端过滤下拉框。"""
     with session_scope() as session:
         actions = session.query(AuditLog.action).distinct().all()
-        return jsonify({"actions": [a[0] for a in actions]})
+        return jsonify({"actions": [a[0] for a in actions if a[0]]})
+
+@bp.get("/resources")
+@require_permissions("audit:read")
+def get_audit_resources():
+    """获取所有已记录的资源类型，用于前端过滤下拉框。"""
+    with session_scope() as session:
+        resources = session.query(AuditLog.resource).distinct().all()
+        return jsonify({"resources": [r[0] for r in resources if r[0]]})

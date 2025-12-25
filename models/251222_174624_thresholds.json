@@ -1,6 +1,0 @@
-{
-  "alert": 0.3,
-  "throttle": 0.6,
-  "block": 0.8,
-  "redirect": 0.9
-}

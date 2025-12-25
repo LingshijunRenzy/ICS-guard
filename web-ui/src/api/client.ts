@@ -366,6 +366,11 @@ export async function fetchAuditActions() {
   return res.data.actions
 }
 
+export async function fetchAuditResources() {
+  const res = await apiClient.get<{ resources: string[] }>('/audit/resources')
+  return res.data.resources
+}
+
 export async function exportAuditLogs(params: {
   start_time?: string
   end_time?: string

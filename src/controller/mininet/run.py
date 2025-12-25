@@ -17,9 +17,19 @@ def main():
                   controller=ryu_ctrl)
     net.start()
     
+    # 优化：等待控制器通过 LLDP 发现所有交换机和链路
+    # 复杂的工控拓扑需要时间来建立完整的图结构
+    info("等待 SDN 控制器初始化拓扑 (3s)...\n")
+    time.sleep(3)
+    
+    # 优化：预填充 ARP 表可以极大减少 pingall 的初始延迟和丢包
+    # info("预填充静态 ARP 表...\n")
+    # net.staticArp()
+    
     # 自动执行 pingall 以触发控制器发现主机
-    info("正在执行 Pingall 以发现主机...\n")
-    net.pingAll()
+    info("正在执行 Pingall 以发现主机并建立流表...\n")
+    # 增加 timeout 参数，给控制器处理 PacketIn 留出时间
+    net.pingAll(timeout=1.0)
     
     # --- 自动启动工控背景流量 ---
     info("正在启动背景工控流量...\n")
@@ -79,7 +89,10 @@ def main():
     info("你可以在 Mininet CLI 中运行以下命令来模拟攻击:\n\n")
     
     info("1. SYN Flood (DoS 攻击):\n")
-    info(f"   ws1 python3 {traffic_script} syn-flood --target {web_portal.IP()} --port 80 --count 10000 &\n\n")
+    info(f"   # 随机源 IP (默认):\n")
+    info(f"   ws1 python3 {traffic_script} syn-flood --target {web_portal.IP()} --port 80 --count 10000 &\n")
+    info(f"   # 固定源 IP 和源端口 (最易被 AI 检测为高频流):\n")
+    info(f"   ws1 python3 {traffic_script} syn-flood --target {web_portal.IP()} --port 80 --count 10000 --src {ws1.IP()} --src-port 12345 &\n\n")
     
     info("2. Modbus Flood (PLC 拒绝服务):\n")
     info(f"   hmi2 python3 {traffic_script} modbus-flood --target {plc1.IP()} --port 5020 --count 5000 &\n\n")

@@ -1,15 +1,17 @@
 import logging
 import time
+import datetime
 import zlib
 import networkx as nx
 from ryu.ofproto import ofproto_v1_3
 from ryu.lib.packet import packet, ethernet, arp, ipv4, tcp, udp, icmp
 
 class ForwardingEngine:
-    def __init__(self, topology_manager, policy_manager):
+    def __init__(self, topology_manager, policy_manager, notification_manager):
         self.logger = logging.getLogger('ForwardingEngine')
         self.topology = topology_manager
         self.policy = policy_manager
+        self.notification = notification_manager
         self.switch_ports = {} # {dpid: [port_no]}
 
     def update_switch_ports(self, dpid, ports):
@@ -94,9 +96,79 @@ class ForwardingEngine:
 
         # Policy Check
         action, reason, action_params = self.policy.check_packet(dpid, src, dst, src_ip, dst_ip, protocol, dst_port)
+        
         if action == 'drop' or action == 'isolate':
             self.logger.info("Packet %s by policy: %s -> %s (%s)", action, src, dst, reason)
+            
+            # Construct flow_id for notification
+            flow_id = f"{dpid}-{src}-{dst}"
+            if src_ip and dst_ip: flow_id += f"-{src_ip}-{dst_ip}"
+            if protocol: flow_id += f"-{protocol}"
+            # Note: We don't have src_port easily here without more parsing, but dst_port is enough
+            if dst_port: flow_id += f"-{dst_port}"
+            
+            # Notify App Layer about the blocked flow
+            flow_data = {
+                'flow_id': flow_id,
+                'dpid': str(dpid),
+                'src_mac': src,
+                'dst_mac': dst,
+                'src_ip': src_ip,
+                'dst_ip': dst_ip,
+                'protocol': protocol,
+                'dst_port': dst_port,
+                'pkt_rate': 0.0,
+                'packet_count': 1,
+                'status': 'active',
+                'blocked': True,
+                'blocked_at': datetime.datetime.now().isoformat(),
+                'block_reason': reason,
+                'timestamp': time.time()
+            }
+            self.notification.push_flow_update(flow_data)
+            
+            # Install a DROP flow to avoid repeated PacketIn
+            match_kwargs = {'eth_src': src, 'eth_dst': dst}
+            if src_ip and dst_ip:
+                match_kwargs['eth_type'] = 0x0800
+                match_kwargs['ipv4_src'] = src_ip
+                match_kwargs['ipv4_dst'] = dst_ip
+                if protocol == 'TCP':
+                    match_kwargs['ip_proto'] = 6
+                    if dst_port: match_kwargs['tcp_dst'] = dst_port
+                elif protocol == 'UDP':
+                    match_kwargs['ip_proto'] = 17
+                    if dst_port: match_kwargs['udp_dst'] = dst_port
+            
+            match = parser.OFPMatch(**match_kwargs)
+            # Priority should be higher than normal forwarding (1)
+            self.add_flow(datapath, 10, match, [], idle_timeout=30)
             return
+
+        if action == 'redirect':
+            # Construct flow_id for notification
+            flow_id = f"{dpid}-{src}-{dst}"
+            if src_ip and dst_ip: flow_id += f"-{src_ip}-{dst_ip}"
+            if protocol: flow_id += f"-{protocol}"
+            if dst_port: flow_id += f"-{dst_port}"
+            
+            # Notify App Layer about the redirected flow
+            flow_data = {
+                'flow_id': flow_id,
+                'dpid': str(dpid),
+                'src_mac': src,
+                'dst_mac': dst,
+                'src_ip': src_ip,
+                'dst_ip': dst_ip,
+                'protocol': protocol,
+                'dst_port': dst_port,
+                'pkt_rate': 0.0,
+                'packet_count': 1,
+                'status': 'active',
+                'redirect_to': action_params.get('targets'),
+                'timestamp': time.time()
+            }
+            self.notification.push_flow_update(flow_data)
 
         # Forwarding Logic
         if dst == 'ff:ff:ff:ff:ff:ff' or dst not in self.topology.host_location:

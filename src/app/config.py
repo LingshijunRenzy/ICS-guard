@@ -21,10 +21,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     # JSON 配置：允许中文直接显示
     "JSON_AS_ASCII": False,
     # 控制层连接
-    "CONTROLLER_BASE_URL": "http://localhost:8000",
-    "CONTROLLER_CLIENT_ID": "app-layer-client",  # 默认客户端 ID（开发环境）
-    "CONTROLLER_CLIENT_SECRET": "app-layer-secret",  # 默认客户端密钥（开发环境）
-    "CONTROLLER_WS_BASE_URL": "ws://localhost:8000",
+    "CONTROLLER_BASE_URL": "http://localhost:8080",
+    "CONTROLLER_CLIENT_ID": "app-layer-client",
+    "CONTROLLER_CLIENT_SECRET": "app-layer-secret",
+    "CONTROLLER_WS_BASE_URL": "ws://localhost:8080",
     # 是否启用控制层 WebSocket 订阅（默认开启，可通过环境变量关闭）
     "ENABLE_CONTROLLER_WS": True,
     # UI WebSocket 服务端配置（用于 /ws/ui-events）
@@ -32,14 +32,16 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "UI_WS_PORT": 8766,
     # 模型与推理（默认指向最新一次训练输出，可通过环境变量覆盖）
     "MODEL_DIR": "models",
-    "MODEL_FILE": "251222_174624_lightgbm_model.pkl",
-    "FEATURES_FILE": "251222_174624_features.json",
-    "THRESHOLDS_FILE": "251222_174624_thresholds.json",
+    "MODEL_FILE": "251225_105021_lightgbm_model.pkl",
+    "FEATURES_FILE": "251225_105021_features.json",
+    "THRESHOLDS_FILE": "251225_105021_thresholds.json",
     # 推理阈值（默认值，可被配置文件覆盖）
     "THRESHOLD_ALERT": 0.3,
     "THRESHOLD_THROTTLE": 0.6,
     "THRESHOLD_BLOCK": 0.8,
     "THRESHOLD_REDIRECT": 0.9,
+    # Flask 核心配置
+    "SECRET_KEY": "ics-guard-dev-secret",
 }
 
 

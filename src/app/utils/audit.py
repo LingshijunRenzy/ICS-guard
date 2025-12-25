@@ -28,10 +28,23 @@ def record_audit_log(
         error_message: 失败时的错误信息
     """
     # 如果没有提供 user_id/username，尝试从 flask.g 中获取
-    if user_id is None and hasattr(g, 'user') and g.user:
-        user_id = g.user.id
-        if username is None:
-            username = g.user.username
+    if user_id is None:
+        user_id = getattr(g, 'current_user_id', None)
+        # 兼容性：如果 current_user_id 不存在但有 user 对象
+        if user_id is None and hasattr(g, 'user') and g.user:
+            try:
+                user_id = g.user.id
+            except Exception:
+                pass
+                
+    if username is None:
+        username = getattr(g, 'current_user_username', None)
+        # 兼容性：如果 current_user_username 不存在但有 user 对象
+        if username is None and hasattr(g, 'user') and g.user:
+            try:
+                username = g.user.username
+            except Exception:
+                pass
     
     # 获取客户端信息
     ip_address = request.remote_addr if request else None

@@ -86,6 +86,16 @@ class TopologyManager:
                 'node_id': str(dpid),
                 'status': 'online'
             })
+            
+            # Push topology change
+            self.notification.push_topology_change('node_added', {
+                'node': {
+                    'id': str(dpid),
+                    'name': name,
+                    'type': 'switch',
+                    'status': 'online'
+                }
+            })
 
     def remove_switch(self, dpid):
         """Manually remove a switch from the topology"""
@@ -103,6 +113,9 @@ class TopologyManager:
                 'node_id': str(dpid),
                 'status': 'offline'
             })
+            
+            # Push topology change
+            self.notification.push_topology_change('node_removed', {'node_id': str(dpid)})
             
             # Cleanup hosts attached to this switch
             hosts_to_remove = []
@@ -189,8 +202,12 @@ class TopologyManager:
             self._mst_dirty = True
             # self.logger.info("Link added: %s:%s -> %s:%s", src, src_port, dst, dst_port)
             self.notification.push_topology_change('link_added', {
-                'src': src, 'src_port': src_port,
-                'dst': dst, 'dst_port': dst_port
+                'link': {
+                    'id': f"{src}:{src_port}-{dst}:{dst_port}",
+                    'source': str(src),
+                    'target': str(dst),
+                    'status': 'active'
+                }
             })
 
     def handle_link_delete(self, link):
@@ -207,8 +224,7 @@ class TopologyManager:
             self._mst_dirty = True
             # self.logger.info("Link deleted: %s:%s -> %s:%s", src, src_port, dst, dst_port)
             self.notification.push_topology_change('link_removed', {
-                'src': src, 'src_port': src_port,
-                'dst': dst, 'dst_port': dst_port
+                'link_id': f"{src}:{src_port}-{dst}:{dst_port}"
             })
 
     def handle_switch_enter(self, dpid):
@@ -227,11 +243,13 @@ class TopologyManager:
             self.nodes[dpid] = NodeInfo(dpid, 'switch', name=name, zone=zone, status='online')
             self.net.add_node(dpid)
             self._mst_dirty = True
-            self.notification.push_topology_change('switch_added', {
-                'dpid': dpid,
-                'type': 'switch',
-                'name': name,
-                'zone': zone
+            self.notification.push_topology_change('node_added', {
+                'node': {
+                    'id': str(dpid),
+                    'name': name,
+                    'type': 'switch',
+                    'status': 'online'
+                }
             })
 
     def handle_switch_leave(self, dpid):
@@ -242,7 +260,7 @@ class TopologyManager:
             if self.net.has_node(dpid):
                 self.net.remove_node(dpid)
             self._mst_dirty = True
-            self.notification.push_topology_change('switch_removed', {'dpid': dpid})
+            self.notification.push_topology_change('node_removed', {'node_id': str(dpid)})
 
     def get_mst(self):
         """Get Minimum Spanning Tree (Cached)"""
@@ -295,17 +313,30 @@ class TopologyManager:
             self._mst_dirty = True # MST changes if we consider hosts part of it, but usually MST is switch-only. 
                                    # However, for shortest path, we need hosts in graph.
         
-        self.notification.push_topology_change('host_added', {
-            'mac': mac, 'dpid': dpid, 'port': port,
-            'ip': self.host_ips.get(mac, ''),
-            'type': node_type,
-            'name': name,
-            'zone': zone
+        self.notification.push_topology_change('node_added', {
+            'node': {
+                'id': mac,
+                'name': name,
+                'type': node_type,
+                'ip': self.host_ips.get(mac, ''),
+                'status': 'online'
+            }
+        })
+        
+        # Also push link for host connection
+        self.notification.push_topology_change('link_added', {
+            'link': {
+                'id': f"{dpid}:{port}-{mac}:0",
+                'source': str(dpid),
+                'target': mac,
+                'status': 'active'
+            }
         })
 
     def unregister_host(self, mac):
         """Unregister a host"""
         if mac in self.host_location:
+            dpid, port = self.host_location[mac]
             del self.host_location[mac]
             if mac in self.host_ips:
                 del self.host_ips[mac]
@@ -320,7 +351,12 @@ class TopologyManager:
                 self._mst_dirty = True
             
             # self.logger.info("Host %s removed", mac)
-            self.notification.push_topology_change('host_removed', {'mac': mac})
+            self.notification.push_topology_change('node_removed', {'node_id': mac})
+            
+            # Also push link removal
+            self.notification.push_topology_change('link_removed', {
+                'link_id': f"{dpid}:{port}-{mac}:0"
+            })
 
     def update_host_ip(self, mac, ip):
         """Update IP for a host"""

@@ -2,13 +2,23 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Download, Search, Refresh, View } from '@element-plus/icons-vue'
-import { fetchAuditLogs, fetchAuditActions, exportAuditLogs, type AuditLog } from '@/api/client'
+import {
+    fetchAuditLogs,
+    fetchAuditActions,
+    fetchAuditResources,
+    fetchUsers,
+    exportAuditLogs,
+    type AuditLog,
+    type AppUser
+} from '@/api/client'
 import dayjs from 'dayjs'
 
 const loading = ref(false)
 const logs = ref<AuditLog[]>([])
 const total = ref(0)
 const actions = ref<string[]>([])
+const resources = ref<string[]>([])
+const users = ref<AppUser[]>([])
 
 const filter = reactive({
     start_time: '',
@@ -16,6 +26,7 @@ const filter = reactive({
     action: '',
     status: '',
     resource: '',
+    user_id: undefined as number | undefined,
     page: 1,
     per_page: 20
 })
@@ -27,6 +38,23 @@ async function loadActions() {
         actions.value = await fetchAuditActions()
     } catch (err) {
         console.error('Failed to load audit actions', err)
+    }
+}
+
+async function loadResources() {
+    try {
+        resources.value = await fetchAuditResources()
+    } catch (err) {
+        console.error('Failed to load audit resources', err)
+    }
+}
+
+async function loadUsers() {
+    try {
+        const res = await fetchUsers()
+        users.value = res.users
+    } catch (err) {
+        console.error('Failed to load users', err)
     }
 }
 
@@ -60,6 +88,7 @@ function handleReset() {
     filter.action = ''
     filter.status = ''
     filter.resource = ''
+    filter.user_id = undefined
     filter.page = 1
     loadLogs()
 }
@@ -71,7 +100,8 @@ async function handleExport() {
             end_time: timeRange.value ? timeRange.value[1] : undefined,
             action: filter.action || undefined,
             status: filter.status || undefined,
-            resource: filter.resource || undefined
+            resource: filter.resource || undefined,
+            user_id: filter.user_id
         })
         const url = window.URL.createObjectURL(new Blob([blob]))
         const link = document.createElement('a')
@@ -102,6 +132,8 @@ function getActionType(action: string) {
 
 onMounted(() => {
     loadActions()
+    loadResources()
+    loadUsers()
     loadLogs()
 })
 </script>
@@ -132,6 +164,16 @@ onMounted(() => {
                 <el-form-item label="操作类型">
                     <el-select v-model="filter.action" placeholder="全部" clearable style="width: 180px">
                         <el-option v-for="act in actions" :key="act" :label="act" :value="act" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="资源类型">
+                    <el-select v-model="filter.resource" placeholder="全部" clearable style="width: 150px">
+                        <el-option v-for="res in resources" :key="res" :label="res" :value="res" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="用户">
+                    <el-select v-model="filter.user_id" placeholder="全部" clearable style="width: 150px">
+                        <el-option v-for="u in users" :key="u.id" :label="u.username" :value="u.id" />
                     </el-select>
                 </el-form-item>
                 <el-form-item label="状态">

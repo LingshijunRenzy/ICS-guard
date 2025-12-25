@@ -122,10 +122,10 @@ def set_preference(key: str):
         if scope == PreferenceScopeEnum.GLOBAL:
             record_audit_log(
                 action="UPDATE_PREFERENCE",
-                username=g.user.username,
-                user_id=g.user.id,
-                status="success",
-                details=f"Updated global preference: {key}"
+                resource="preference",
+                resource_id=key,
+                payload={"key": key, "value": value_str},
+                status="success"
             )
 
     return jsonify({

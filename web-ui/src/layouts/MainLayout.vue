@@ -1,7 +1,12 @@
+<script lang="ts">
+// 使用模块级变量确保 WebSocket 单例，防止 HMR 或组件重载导致重复连接
+let sharedWs: WebSocket | null = null
+</script>
+
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElNotification } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { useThemeStore } from '@/stores/theme'
 
@@ -9,6 +14,193 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const themeStore = useThemeStore()
+
+function getWsUrl(): string {
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws'
+  const host = window.location.hostname
+  const port = 8766
+  return `${protocol}://${host}:${port}/ui-events`
+}
+
+function connectWs() {
+  // 如果已存在连接，先关闭，确保只保留一个活跃连接
+  if (sharedWs) {
+    sharedWs.close()
+    sharedWs = null
+  }
+
+  const url = getWsUrl()
+  sharedWs = new WebSocket(url)
+
+  sharedWs.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data)
+      handleGlobalNotification(msg)
+    } catch (e) {
+      console.error('Failed to parse WS message', e)
+    }
+  }
+
+  sharedWs.onclose = () => {
+    // 只有当 sharedWs 还是当前这个实例时才重连
+    // 防止旧的连接关闭触发重连
+    if (sharedWs === thisWs) {
+      sharedWs = null
+      setTimeout(connectWs, 5000)
+    }
+  }
+  
+  // 保存当前引用以便在 onclose 中比对
+  const thisWs = sharedWs
+}
+
+// ---- 通知管理 ----
+const activeNotifications: any[] = []
+const MAX_NOTIFICATIONS = 5
+
+function showNotification(options: any) {
+  // 1. 检查并清理最早的通知
+  if (activeNotifications.length >= MAX_NOTIFICATIONS) {
+    const oldest = activeNotifications.shift()
+    if (oldest) oldest.close()
+  }
+
+  // 2. 包装 onClose 回调以维护队列
+  const userOnClose = options.onClose
+  // 使用一个 holder 对象来捕获稍后生成的 instance
+  const holder: { instance: any } = { instance: null }
+
+  const newOptions = {
+    ...options,
+    onClose: () => {
+      // 从队列中移除
+      if (holder.instance) {
+        const idx = activeNotifications.indexOf(holder.instance)
+        if (idx !== -1) {
+          activeNotifications.splice(idx, 1)
+        }
+      }
+      // 调用用户原本的 onClose (如果有)
+      if (userOnClose) userOnClose()
+    }
+  }
+
+  // 3. 创建通知
+  const instance = ElNotification(newOptions)
+  holder.instance = instance
+  activeNotifications.push(instance)
+}
+
+function handleGlobalNotification(msg: any) {
+  const { type, data } = msg
+  if (!type || !data) return
+
+  const commonOptions = {
+    position: 'bottom-right' as const,
+    duration: 5000,
+    customClass: 'compact-notification',
+  }
+
+  // 1. 自动创建策略 / 流量异常 (auto_mitigation)
+  if (type === 'traffic_anomaly') {
+    if (data.type === 'auto_mitigation') {
+      const details = data.details || {}
+      showNotification({
+        ...commonOptions,
+        title: '自动响应执行',
+        message: `已自动创建策略 ${details.policy_id}。动作: ${details.action}，目标: ${details.target}`,
+        type: 'warning',
+        duration: 6000,
+      })
+    } else {
+      showNotification({
+        ...commonOptions,
+        title: '流量异常警告',
+        message: `检测到异常流量 ${data.flow_id}。${data.description || ''}`,
+        type: 'warning',
+      })
+    }
+  }
+
+  // 2. 流量阻断
+  else if (type === 'traffic_block') {
+    showNotification({
+      ...commonOptions,
+      title: '流量被阻断',
+      message: `Flow ${data.flow_id} 已被阻断。原因: ${data.reason || data.block_reason || '策略执行'}`,
+      type: 'error',
+    })
+  }
+
+  // 3. 流量重定向
+  else if (type === 'traffic_redirect') {
+    showNotification({
+      ...commonOptions,
+      title: '流量被重定向',
+      message: `Flow ${data.flow_id} 已重定向至 ${data.redirect_to}。原因: ${data.reason || '策略执行'}`,
+      type: 'warning',
+    })
+  }
+
+  // 4. AI 检测结果 (仅高危)
+  else if (type === 'flow_detection_result') {
+    if (data.detect_status === 'dangerous') {
+      const flow = data.flow_details || {}
+      showNotification({
+        ...commonOptions,
+        title: '检测到高危流量',
+        message: `源: ${flow.src_ip}:${flow.src_port} -> 目的: ${flow.dst_ip}:${flow.dst_port}。置信度: ${(data.prob * 100).toFixed(1)}%`,
+        type: 'error',
+        duration: 6000,
+      })
+    }
+  }
+
+  // 5. 蜜罐交互
+  else if (type === 'honeypot_interaction') {
+    showNotification({
+      ...commonOptions,
+      title: '蜜罐入侵警告',
+      message: `蜜罐收到来自 ${data.source_ip} 的请求: ${data.request}`,
+      type: 'error',
+      duration: 6000,
+    })
+  }
+
+  // 6. 节点状态变更
+  else if (type === 'network_status_update') {
+    const status = data.status || 'unknown'
+    const nodeId = data.node_id || 'Unknown Node'
+
+    if (status === 'online') {
+      showNotification({
+        ...commonOptions,
+        title: '节点上线',
+        message: `节点 ${nodeId} 已连接到网络。`,
+        type: 'success',
+        duration: 4000,
+      })
+    } else if (status === 'offline') {
+      showNotification({
+        ...commonOptions,
+        title: '节点下线',
+        message: `节点 ${nodeId} 已断开连接！`,
+        type: 'warning',
+      })
+    }
+  }
+}
+
+onMounted(() => {
+  connectWs()
+})
+
+onBeforeUnmount(() => {
+  if (sharedWs) {
+    sharedWs.close()
+    sharedWs = null
+  }
+})
 
 const menus = [
   { path: '/', label: '概览', name: 'home' },
@@ -78,7 +270,7 @@ function handleLogout() {
         <div class="layout-header-left">
           <div class="layout-header-logo">ICS-GUARD // SYSTEM</div>
           <div class="layout-header-title">>> {{ route.meta.title ? String(route.meta.title).toUpperCase() : 'CONSOLE'
-            }}</div>
+          }}</div>
         </div>
         <div class="layout-header-right">
           <div class="header-status">SYSTEM STATUS: <span style="color: var(--cyber-success)">NORMAL</span></div>
@@ -92,11 +284,7 @@ function handleLogout() {
       <div class="layout-body">
         <el-container class="layout-body-container">
           <el-aside width="220px" class="layout-aside">
-            <el-menu
-              :default-active="route.path"
-              class="layout-menu"
-              @select="handleSelect"
-            >
+            <el-menu :default-active="route.path" class="layout-menu" @select="handleSelect">
               <el-menu-item v-for="item in visibleMenus" :key="item.path" :index="item.path">
                 <span class="menu-label">{{ item.label }}</span>
                 <span class="menu-decoration"></span>
@@ -137,7 +325,7 @@ function handleLogout() {
   justify-content: space-between;
   padding: 0 24px;
   border-bottom: 1px solid var(--cyber-border-color);
-    background: var(--cyber-header-bg);
+  background: var(--cyber-header-bg);
   position: relative;
   z-index: 100;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -153,9 +341,9 @@ function handleLogout() {
   font-family: 'Orbitron', sans-serif;
   font-weight: 700;
   font-size: 20px;
-    color: var(--cyber-btn-hover-text);
-    background-color: var(--cyber-primary);
-    padding: 2px 10px;
+  color: var(--cyber-btn-hover-text);
+  background-color: var(--cyber-primary);
+  padding: 2px 10px;
   letter-spacing: 2px;
   text-shadow: none;
 }
@@ -205,7 +393,7 @@ function handleLogout() {
 
 .layout-aside {
   background: var(--cyber-aside-bg);
-    border-right: 1px solid var(--cyber-aside-border);
+  border-right: 1px solid var(--cyber-aside-border);
   display: flex;
   flex-direction: column;
   backdrop-filter: blur(4px);
@@ -260,3 +448,41 @@ function handleLogout() {
 }
 </style>
 
+<style>
+/* 全局通知样式 - 紧凑模式 */
+.compact-notification {
+  width: 400px !important;
+  padding: 10px 15px !important;
+}
+
+.compact-notification .el-notification__title {
+  font-size: 14px !important;
+  margin-bottom: 5px !important;
+  font-weight: 600 !important;
+}
+
+.compact-notification .el-notification__content {
+  font-size: 12px !important;
+  margin: 0 !important;
+  line-height: 1.4 !important;
+
+  /* 多行省略 */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-all;
+}
+
+.compact-notification .el-notification__icon {
+  height: 20px !important;
+  width: 20px !important;
+  font-size: 20px !important;
+}
+
+.compact-notification .el-notification__group {
+  margin-left: 10px !important;
+  margin-right: 0 !important;
+}
+</style>

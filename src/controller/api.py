@@ -15,7 +15,7 @@ API_INSTANCE_NAME = 'sdn_controller_api_app'
 
 class SDNControllerAPI(ControllerBase):
     def __init__(self, req, link, data, **config):
-        super(SDNControllerAPI, self).__init__(req, link, data, **config)
+        super().__init__(req, link, data, **config)
         self.sdn_controller = data[API_INSTANCE_NAME]
         self.secret_key = "ics_guard_secret"
 

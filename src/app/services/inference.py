@@ -263,7 +263,44 @@ class InferenceService:
         按照 flow-feature-mapping.md 的约定：
         - 使用 duration, pkt_count, byte_count, pkt_rate, byte_rate 等字段
         - 对缺失值使用配置的填充策略
+        - 自动应用启发式规则填补控制器未提供的特征（如 sSynRate）
         """
+        # 1. 基础字段映射 (Controller -> Model)
+        if 'sPackets' not in flow and 'packet_count' in flow:
+            flow['sPackets'] = flow['packet_count']
+        if 'rPackets' not in flow:
+            flow['rPackets'] = 0 # 假设单向统计
+        if 'sBytesSum' not in flow and 'byte_count' in flow:
+            flow['sBytesSum'] = flow['byte_count']
+        if 'rBytesSum' not in flow:
+            flow['rBytesSum'] = 0
+        if 'sLoad' not in flow and 'byte_rate' in flow:
+            flow['sLoad'] = flow['byte_rate'] * 8
+        if 'rLoad' not in flow:
+            flow['rLoad'] = 0
+        if 'sttl' not in flow:
+            flow['sttl'] = 64.0
+        if 'rttl' not in flow:
+            flow['rttl'] = 0.0
+
+        # 2. 启发式特征填充 (针对 SYN/ACK Flood)
+        # 控制器通常不提供标志位统计，需根据速率和包大小推断
+        if 'sSynRate' not in flow:
+            pkt_rate = float(flow.get('pkt_rate', 0.0))
+            byte_rate = float(flow.get('byte_rate', 0.0))
+            
+            # 规则：高包率 (>1000 pps) 且 小包 (<100 bytes) -> 疑似控制报文泛洪
+            if pkt_rate > 1000 and pkt_rate > 0:
+                avg_pkt_size = byte_rate / pkt_rate
+                if avg_pkt_size < 120: # TCP(20)+IP(20)+Eth(14) + Padding ~= 60-100 bytes
+                    # 激进策略：在高危场景下假设为 SYN Flood，以触发高概率告警
+                    flow['sSynRate'] = 1.0 
+                    flow['sAckRate'] = 0.0
+                else:
+                    flow['sSynRate'] = 0.0
+            else:
+                flow['sSynRate'] = 0.0
+
         features = []
         for col in self._feature_config.feature_columns:
             val = flow.get(col)
@@ -300,6 +337,44 @@ class InferenceService:
 
         # 构建特征向量
         X = self.build_feature_vector(flow)
+
+        # --- 规则 1: 智能低频白名单 (Smart Low Rate Whitelist) ---
+        # 仅当流量速率低且表现出“单纯轮询”特征（低熵、低离散度）时才放行。
+        # 如果速率低但功能码混乱（熵高）或地址跳变（方差大），可能是低频探测或注入攻击，
+        # 此时应交给模型判断。
+        pkt_rate = flow.get("pkt_rate")
+        func_entropy = flow.get("func_code_entropy") or 0.0
+        reg_std = flow.get("reg_addr_std") or 0.0
+
+        # 阈值设定：
+        # func_entropy > 0.1: 说明功能码不单一（例如混杂了读和写）
+        # reg_std > 5.0: 说明访问的寄存器地址跨度大或不规律
+        if pkt_rate is not None and pkt_rate < 5.0:
+            if func_entropy < 0.1 and reg_std < 5.0:
+                return PredictionResult(
+                    prob=0.01,
+                    label="Normal",
+                    anomaly_score=0.0,
+                    decision_level=DecisionLevel.NORMAL,
+                )
+            # else: 低频但特征异常（如篡改/扫描），跳过白名单，继续执行模型推理
+
+        # --- 规则 2: 数据不足白名单 ---
+        # 如果 pkt_count 缺失，说明控制器尚未收集到足够统计信息，
+        # 此时特征向量会被填充为 0，极易导致模型误判。
+        # [修正] 对于高频流，即使 pkt_count 缺失（可能是控制器统计延迟），
+        # 只要 pkt_rate 极高，也应视为异常，不能简单放行。
+        if flow.get("pkt_count") is None:
+             # 如果速率极高，即使没有 pkt_count 也不能放行，必须交给模型（模型会根据 pkt_rate 判别）
+             if pkt_rate is not None and pkt_rate > 1000:
+                 pass # 继续执行推理
+             else:
+                 return PredictionResult(
+                    prob=0.0,
+                    label="Normal",
+                    anomaly_score=0.0,
+                    decision_level=DecisionLevel.NORMAL,
+                )
 
         # 执行推理
         try:

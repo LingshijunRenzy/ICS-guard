@@ -772,7 +772,24 @@ const findPath = (sourceId: string, targetId: string): NodeObject[] | null => {
   return null
 }
 
+// 视觉节流配置
+const MAX_CONCURRENT_ANIMATIONS = 50
+const ANIMATION_THROTTLE_MS = 50
+let lastAnimationTime = 0
+
 const createFlowAnimation = (sourceId: string, targetId: string, pathHops?: any[], blocked?: boolean): void => {
+  // 1. 检查并发数量限制
+  if (flowAnimations.size >= MAX_CONCURRENT_ANIMATIONS) {
+    return
+  }
+
+  // 2. 检查创建频率限制
+  const now = Date.now()
+  if (now - lastAnimationTime < ANIMATION_THROTTLE_MS) {
+    return
+  }
+  lastAnimationTime = now
+
   const sourceNode = nodeObjects.get(sourceId)
   const targetNode = nodeObjects.get(targetId)
 
@@ -1117,10 +1134,46 @@ const connectWebSocket = () => {
             const nodeId = details.node_id
             const nodeObj = nodeObjects.get(nodeId)
             if (nodeObj) {
+              // 1. 移除节点
               scene.remove(nodeObj.threeGroup)
               nodeObjects.delete(nodeId)
+
+              // 2. 移除与该节点相连的所有连线
+              const linksToKeep: LinkObject[] = []
+              const linksToRemove: LinkObject[] = []
+
+              linkObjects.forEach(link => {
+                const sId = typeof link.source === 'string' ? link.source : link.source.id
+                const tId = typeof link.target === 'string' ? link.target : link.target.id
+                
+                if (sId === nodeId || tId === nodeId) {
+                  linksToRemove.push(link)
+                } else {
+                  linksToKeep.push(link)
+                }
+              })
+
+              // 从场景中移除连线 Mesh
+              linksToRemove.forEach(link => {
+                scene.remove(link.threeMesh)
+                // 简单清理资源
+                link.threeMesh.geometry.dispose()
+                if (link.threeMesh.material instanceof THREE.Material) {
+                  link.threeMesh.material.dispose()
+                }
+              })
+
+              // 更新全局 linkObjects
+              linkObjects.length = 0
+              linkObjects.push(...linksToKeep)
+
+              // 3. 重启仿真
               if (simulation) {
                 simulation.nodes(Array.from(nodeObjects.values()))
+                const linkForce = simulation.force('link') as d3.ForceLink<NodeObject, LinkObject>
+                if (linkForce) {
+                  linkForce.links(linkObjects)
+                }
                 simulation.alpha(0.3).restart()
               }
             }

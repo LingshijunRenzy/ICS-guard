@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete } from '@element-plus/icons-vue'
 import type { PolicySummary, PolicyDetail, TopologyResponse } from '@/api/client'
 import {
   fetchPolicies,
@@ -25,6 +26,21 @@ const topology = ref<TopologyResponse>({ nodes: [], links: [] })
 const filterType = ref<string>('')
 const filterStatus = ref<string>('')
 const searchText = ref('')
+
+// 操作符选项
+const operatorOptions = [
+  { label: '>', value: '_gt' },
+  { label: '>=', value: '_gte' },
+  { label: '<', value: '_lt' },
+  { label: '<=', value: '_lte' },
+  { label: '==', value: '_eq' },
+  { label: '不限制', value: 'none' },
+]
+
+const numericalFields = [
+  'cpu_usage', 'mem_usage', 'bandwidth_usage', 'latency_ms',
+  'byte_rate', 'duration', 'function_code_entropy', 'payload_anomaly_score'
+]
 
 // 表单数据
 const formData = ref<Partial<PolicyDetail>>({
@@ -84,10 +100,18 @@ const targetTypeOptions = computed(() => {
   return []
 })
 
-watch(() => formData.value.type, () => {
+watch(() => formData.value.type, (newType) => {
+  if (!formData.value.conditions) formData.value.conditions = {}
+
   if (formData.value.scope) {
     formData.value.scope.target_type = '' as any
     formData.value.scope.target_identifier = ''
+  }
+  // 初始化特定类型的条件结构，防止模板访问 undefined
+  if (newType === 'node') {
+    const c = formData.value.conditions as any
+    if (!c.ingress_filter) c.ingress_filter = { src_ip: '', protocol: '', pkt_rate_op: '_gt', pkt_rate_val: 0 }
+    if (!c.egress_filter) c.egress_filter = { dst_ip: '', protocol: '', pkt_rate_op: '_gt', pkt_rate_val: 0 }
   }
 })
 
@@ -131,7 +155,10 @@ const openDrawer = async (mode: 'view' | 'edit' | 'create', policyId?: string) =
         target_type: 'device',
         target_identifier: '',
       },
-      conditions: {},
+      conditions: {
+        ingress_filter: { src_ip: '', protocol: '', pkt_rate_op: '_gt', pkt_rate_val: 0 },
+        egress_filter: { dst_ip: '', protocol: '', pkt_rate_op: '_gt', pkt_rate_val: 0 }
+      },
       actions: {
         primary_action: {
           action_type: 'allow',
@@ -147,11 +174,63 @@ const openDrawer = async (mode: 'view' | 'edit' | 'create', policyId?: string) =
       const data = { ...currentPolicy.value }
 
       // Transform nested time_window for UI binding
-      if (data.conditions && (data.conditions as any).time_window) {
-        const tw = (data.conditions as any).time_window
-          ; (data.conditions as any).time_window_start = tw.start_time
-          ; (data.conditions as any).time_window_end = tw.end_time
-          ; (data.conditions as any).time_window_days = tw.days
+      if (data.conditions) {
+        const conds = data.conditions as any
+        if (conds.time_window) {
+          const tw = conds.time_window
+          conds.time_window_start = tw.start_time
+          conds.time_window_end = tw.end_time
+          conds.time_window_days = tw.days
+        }
+
+        // Transform numerical operators for UI
+        numericalFields.forEach(field => {
+          const foundKey = Object.keys(conds).find(k => k.startsWith(field + '_'))
+          if (foundKey) {
+            const op = foundKey.replace(field, '')
+            conds[`${field}_op`] = op
+            conds[`${field}_val`] = conds[foundKey]
+          } else if (conds[field] !== undefined) {
+            // Handle exact match if no suffix
+            conds[`${field}_op`] = '_eq'
+            conds[`${field}_val`] = conds[field]
+          }
+        })
+
+        // Transform ingress/egress filters for UI
+        if (!conds.ingress_filter) conds.ingress_filter = {}
+        const inf = conds.ingress_filter
+        if (inf.src_ip === undefined) inf.src_ip = ''
+        if (inf.protocol === undefined) inf.protocol = ''
+        const inPktKey = Object.keys(inf).find(k => k.startsWith('pkt_rate_'))
+        if (inPktKey) {
+          inf.pkt_rate_op = inPktKey.replace('pkt_rate', '')
+          inf.pkt_rate_val = inf[inPktKey]
+        } else {
+          inf.pkt_rate_op = inf.pkt_rate_op || '_gt'
+          inf.pkt_rate_val = inf.pkt_rate_val || 0
+        }
+
+        if (!conds.egress_filter) conds.egress_filter = {}
+        const egf = conds.egress_filter
+        if (egf.dst_ip === undefined) egf.dst_ip = ''
+        if (egf.protocol === undefined) egf.protocol = ''
+        const egPktKey = Object.keys(egf).find(k => k.startsWith('pkt_rate_'))
+        if (egPktKey) {
+          egf.pkt_rate_op = egPktKey.replace('pkt_rate', '')
+          egf.pkt_rate_val = egf[egPktKey]
+        } else {
+          egf.pkt_rate_op = egf.pkt_rate_op || '_gt'
+          egf.pkt_rate_val = egf.pkt_rate_val || 0
+        }
+      }
+
+      // Ensure redirect targets is an array
+      if (data.actions?.primary_action.action_type === 'redirect') {
+        if (!data.actions.primary_action.action_params) data.actions.primary_action.action_params = {}
+        if (!data.actions.primary_action.action_params.targets) {
+          data.actions.primary_action.action_params.targets = []
+        }
       }
 
       formData.value = data
@@ -181,6 +260,61 @@ const savePolicy = async () => {
         delete c.time_window_start
         delete c.time_window_end
         delete c.time_window_days
+      }
+
+      // Transform numerical operators back to suffixed keys
+      numericalFields.forEach(field => {
+        const op = c[`${field}_op`]
+        const val = c[`${field}_val`]
+        if (op && op !== 'none' && val !== undefined && val !== null) {
+          c[`${field}${op}`] = val
+        }
+        // Clean up UI-only fields
+        delete c[`${field}_op`]
+        delete c[`${field}_val`]
+        // Also delete any old versions without suffixes if they exist
+        delete c[field]
+        // And delete other possible suffixes to avoid duplicates if user changed operator
+        operatorOptions.forEach(opt => {
+          if (opt.value !== op || op === 'none') {
+            delete c[`${field}${opt.value}`]
+          }
+        })
+      })
+
+      // Transform ingress/egress filters back
+      if (c.ingress_filter) {
+        const f = c.ingress_filter
+        if (f.pkt_rate_op && f.pkt_rate_op !== 'none' && f.pkt_rate_val !== undefined) {
+          operatorOptions.forEach(opt => delete f[`pkt_rate${opt.value}`])
+          f[`pkt_rate${f.pkt_rate_op}`] = f.pkt_rate_val
+        }
+        // If op is none, ensure all suffixed versions are removed
+        if (f.pkt_rate_op === 'none') {
+          operatorOptions.forEach(opt => delete f[`pkt_rate${opt.value}`])
+        }
+        delete f.pkt_rate_op
+        delete f.pkt_rate_val
+        if (!f.src_ip) delete f.src_ip
+        if (!f.protocol) delete f.protocol
+        if (Object.keys(f).length === 0) delete c.ingress_filter
+      }
+
+      if (c.egress_filter) {
+        const f = c.egress_filter
+        if (f.pkt_rate_op && f.pkt_rate_op !== 'none' && f.pkt_rate_val !== undefined) {
+          operatorOptions.forEach(opt => delete f[`pkt_rate${opt.value}`])
+          f[`pkt_rate${f.pkt_rate_op}`] = f.pkt_rate_val
+        }
+        // If op is none, ensure all suffixed versions are removed
+        if (f.pkt_rate_op === 'none') {
+          operatorOptions.forEach(opt => delete f[`pkt_rate${opt.value}`])
+        }
+        delete f.pkt_rate_op
+        delete f.pkt_rate_val
+        if (!f.dst_ip) delete f.dst_ip
+        if (!f.protocol) delete f.protocol
+        if (Object.keys(f).length === 0) delete c.egress_filter
       }
     }
 
@@ -284,6 +418,9 @@ watch(() => formData.value.actions?.primary_action.action_type, (newType) => {
   if (newType === 'throttle' && !params.rate_limit) {
     params.rate_limit = { bandwidth_mbps: 10 }
   }
+  if (newType === 'redirect' && !params.targets) {
+    params.targets = [{ ip: '', port: undefined }]
+  }
 })
 
 // 添加次要动作
@@ -317,6 +454,17 @@ const removeSecondaryAction = (index: number) => {
   if (formData.value.actions?.secondary_actions) {
     formData.value.actions.secondary_actions.splice(index, 1)
   }
+}
+
+// 添加重定向目标
+const addRedirectTarget = () => {
+  if (!formData.value.actions?.primary_action.action_params) {
+    formData.value.actions!.primary_action.action_params = {}
+  }
+  if (!formData.value.actions!.primary_action.action_params.targets) {
+    formData.value.actions!.primary_action.action_params.targets = []
+  }
+  formData.value.actions!.primary_action.action_params.targets.push({ ip: '', port: undefined })
 }
 
 // 初始化
@@ -389,14 +537,13 @@ onMounted(() => {
             <span class="priority-value">{{ row.priority || '-' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="300" fixed="right">
+        <el-table-column label="操作" width="250" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openDrawer('view', row.id)">查看</el-button>
             <el-button link type="primary" size="small" @click="openDrawer('edit', row.id)">编辑</el-button>
             <el-button link type="primary" size="small" @click="toggleStatus(row)">
               {{ row.status === 'active' ? '禁用' : '启用' }}
             </el-button>
-            <el-button link type="primary" size="small" @click="handleApply(row)">应用</el-button>
             <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -442,26 +589,26 @@ onMounted(() => {
           <div class="section-title">作用域</div>
           <div class="detail-row">
             <span class="detail-label">目标类型:</span>
-            <span class="detail-value">{{ currentPolicy.scope.target_type }}</span>
+            <span class="detail-value">{{ currentPolicy.scope?.target_type || 'N/A' }}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">目标标识:</span>
-            <span class="detail-value">{{ currentPolicy.scope.target_identifier }}</span>
+            <span class="detail-value">{{ currentPolicy.scope?.target_identifier || 'N/A' }}</span>
           </div>
         </div>
 
         <div class="detail-section">
           <div class="section-title">条件</div>
-          <pre class="json-preview">{{ JSON.stringify(currentPolicy.conditions, null, 2) }}</pre>
+          <pre class="json-preview">{{ JSON.stringify(currentPolicy.conditions || {}, null, 2) }}</pre>
         </div>
 
         <div class="detail-section">
           <div class="section-title">动作</div>
           <div class="detail-row">
             <span class="detail-label">主要动作:</span>
-            <span class="detail-value">{{ currentPolicy.actions.primary_action.action_type }}</span>
+            <span class="detail-value">{{ currentPolicy.actions?.primary_action?.action_type || 'N/A' }}</span>
           </div>
-          <div v-if="currentPolicy.actions.secondary_actions?.length" class="secondary-actions">
+          <div v-if="currentPolicy.actions?.secondary_actions?.length" class="secondary-actions">
             <div class="detail-label">次要动作:</div>
             <pre class="json-preview">{{ JSON.stringify(currentPolicy.actions.secondary_actions, null, 2) }}</pre>
           </div>
@@ -469,8 +616,6 @@ onMounted(() => {
 
         <div class="drawer-actions">
           <el-button type="primary" @click="openDrawer('edit', currentPolicy.id)">编辑</el-button>
-          <el-button @click="handleApply(currentPolicy as any)">应用</el-button>
-          <el-button @click="handleRevoke(currentPolicy as any)">撤销</el-button>
           <el-button type="danger" @click="handleDelete(currentPolicy as any)">删除</el-button>
         </div>
       </div>
@@ -539,27 +684,66 @@ onMounted(() => {
             <!-- Node Conditions -->
             <div v-if="formData.type === 'node'" class="conditions-node">
               <el-divider content-position="left">流量方向 (Traffic)</el-divider>
-              <el-form-item label="流入特征 (JSON)">
-                <el-input :model-value="JSON.stringify((formData.conditions as any)?.ingress_filter || {}, null, 2)"
-                  type="textarea" :rows="2" placeholder='{"src_ip": "10.0.0.5", "protocol": "modbus"}'
-                  @input="(val: string) => { try { if (!formData.conditions) formData.conditions = {}; (formData.conditions as any).ingress_filter = JSON.parse(val) } catch (e) { } }" />
-              </el-form-item>
-              <el-form-item label="流出特征 (JSON)">
-                <el-input :model-value="JSON.stringify((formData.conditions as any)?.egress_filter || {}, null, 2)"
-                  type="textarea" :rows="2" placeholder='{"dst_ip": "10.0.0.20", "pkt_rate_gt": 100}'
-                  @input="(val: string) => { try { if (!formData.conditions) formData.conditions = {}; (formData.conditions as any).egress_filter = JSON.parse(val) } catch (e) { } }" />
-              </el-form-item>
+              <div class="filter-group">
+                <div class="filter-title">流入特征 (Ingress)</div>
+                <div class="filter-row">
+                  <el-input v-model="(formData.conditions as any).ingress_filter.src_ip" placeholder="源 IP"
+                    style="width: 140px" />
+                  <el-input v-model="(formData.conditions as any).ingress_filter.protocol" placeholder="协议 (如 modbus)"
+                    style="width: 120px" />
+                  <div class="op-val-group">
+                    <el-select v-model="(formData.conditions as any).ingress_filter.pkt_rate_op" style="width: 90px">
+                      <el-option v-for="op in operatorOptions" :key="op.value" :label="op.label" :value="op.value" />
+                    </el-select>
+                    <el-input-number v-if="(formData.conditions as any).ingress_filter.pkt_rate_op !== 'none'"
+                      v-model="(formData.conditions as any).ingress_filter.pkt_rate_val" :min="0" placeholder="包速率"
+                      style="width: 120px" />
+                    <span v-if="(formData.conditions as any).ingress_filter.pkt_rate_op !== 'none'"
+                      class="unit">pps</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="filter-group" style="margin-top: 15px">
+                <div class="filter-title">流出特征 (Egress)</div>
+                <div class="filter-row">
+                  <el-input v-model="(formData.conditions as any).egress_filter.dst_ip" placeholder="目的 IP"
+                    style="width: 140px" />
+                  <el-input v-model="(formData.conditions as any).egress_filter.protocol" placeholder="协议 (如 modbus)"
+                    style="width: 120px" />
+                  <div class="op-val-group">
+                    <el-select v-model="(formData.conditions as any).egress_filter.pkt_rate_op" style="width: 90px">
+                      <el-option v-for="op in operatorOptions" :key="op.value" :label="op.label" :value="op.value" />
+                    </el-select>
+                    <el-input-number v-if="(formData.conditions as any).egress_filter.pkt_rate_op !== 'none'"
+                      v-model="(formData.conditions as any).egress_filter.pkt_rate_val" :min="0" placeholder="包速率"
+                      style="width: 120px" />
+                    <span v-if="(formData.conditions as any).egress_filter.pkt_rate_op !== 'none'"
+                      class="unit">pps</span>
+                  </div>
+                </div>
+              </div>
 
               <el-divider content-position="left">资源状态 (Resource)</el-divider>
-              <div style="display: flex; gap: 10px">
-                <el-form-item label="CPU > (%)" style="flex: 1">
-                  <el-input-number v-model="(formData.conditions as any).cpu_usage_gt" :min="0" :max="100"
-                    style="width: 100%" />
-                </el-form-item>
-                <el-form-item label="内存 > (%)" style="flex: 1">
-                  <el-input-number v-model="(formData.conditions as any).mem_usage_gt" :min="0" :max="100"
-                    style="width: 100%" />
-                </el-form-item>
+              <div style="display: flex; flex-direction: column; gap: 10px">
+                <div style="display: flex; gap: 10px; align-items: center">
+                  <span style="width: 80px">CPU 使用率</span>
+                  <el-select v-model="(formData.conditions as any).cpu_usage_op" placeholder="操作符" style="width: 100px">
+                    <el-option v-for="op in operatorOptions" :key="op.value" :label="op.label" :value="op.value" />
+                  </el-select>
+                  <el-input-number v-if="(formData.conditions as any).cpu_usage_op !== 'none'"
+                    v-model="(formData.conditions as any).cpu_usage_val" :min="0" :max="100" style="flex: 1" />
+                  <span v-if="(formData.conditions as any).cpu_usage_op !== 'none'">%</span>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center">
+                  <span style="width: 80px">内存使用率</span>
+                  <el-select v-model="(formData.conditions as any).mem_usage_op" placeholder="操作符" style="width: 100px">
+                    <el-option v-for="op in operatorOptions" :key="op.value" :label="op.label" :value="op.value" />
+                  </el-select>
+                  <el-input-number v-if="(formData.conditions as any).mem_usage_op !== 'none'"
+                    v-model="(formData.conditions as any).mem_usage_val" :min="0" :max="100" style="flex: 1" />
+                  <span v-if="(formData.conditions as any).mem_usage_op !== 'none'">%</span>
+                </div>
               </div>
 
               <el-divider content-position="left">安全状态 (Security)</el-divider>
@@ -576,20 +760,33 @@ onMounted(() => {
             <!-- Connection Conditions -->
             <div v-else-if="formData.type === 'connection'" class="conditions-connection">
               <el-divider content-position="left">链路负载 (Load)</el-divider>
-              <div style="display: flex; gap: 10px">
-                <el-form-item label="带宽 > (%)" style="flex: 1">
-                  <el-input-number v-model="(formData.conditions as any).bandwidth_usage_gt" :min="0" :max="100"
-                    style="width: 100%" />
-                </el-form-item>
-                <el-form-item label="延迟 > (ms)" style="flex: 1">
-                  <el-input-number v-model="(formData.conditions as any).latency_ms_gt" :min="0" style="width: 100%" />
-                </el-form-item>
+              <div style="display: flex; flex-direction: column; gap: 10px">
+                <div style="display: flex; gap: 10px; align-items: center">
+                  <span style="width: 80px">带宽使用率</span>
+                  <el-select v-model="(formData.conditions as any).bandwidth_usage_op" placeholder="操作符"
+                    style="width: 100px">
+                    <el-option v-for="op in operatorOptions" :key="op.value" :label="op.label" :value="op.value" />
+                  </el-select>
+                  <el-input-number v-if="(formData.conditions as any).bandwidth_usage_op !== 'none'"
+                    v-model="(formData.conditions as any).bandwidth_usage_val" :min="0" :max="100" style="flex: 1" />
+                  <span v-if="(formData.conditions as any).bandwidth_usage_op !== 'none'">%</span>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center">
+                  <span style="width: 80px">链路延迟</span>
+                  <el-select v-model="(formData.conditions as any).latency_ms_op" placeholder="操作符"
+                    style="width: 100px">
+                    <el-option v-for="op in operatorOptions" :key="op.value" :label="op.label" :value="op.value" />
+                  </el-select>
+                  <el-input-number v-if="(formData.conditions as any).latency_ms_op !== 'none'"
+                    v-model="(formData.conditions as any).latency_ms_val" :min="0" style="flex: 1" />
+                  <span v-if="(formData.conditions as any).latency_ms_op !== 'none'">ms</span>
+                </div>
               </div>
 
               <el-divider content-position="left">协议与时间</el-divider>
               <el-form-item label="允许协议">
                 <el-input :model-value="((formData.conditions as any)?.allowed_protocols || []).join(', ')"
-                  placeholder="modbus, s7comm"
+                  placeholder="使用全小写字母，例如: modbus, s7comm"
                   @input="(val: string) => { if (!formData.conditions) formData.conditions = {}; (formData.conditions as any).allowed_protocols = val.split(',').map(s => s.trim()).filter(Boolean) }" />
               </el-form-item>
               <el-form-item label="时间窗口">
@@ -616,25 +813,48 @@ onMounted(() => {
             <!-- Flow Conditions -->
             <div v-else-if="formData.type === 'flow'" class="conditions-flow">
               <el-divider content-position="left">统计特征 (Stats)</el-divider>
-              <div style="display: flex; gap: 10px">
-                <el-form-item label="速率 > (B/s)" style="flex: 1">
-                  <el-input-number v-model="(formData.conditions as any).byte_rate_gt" :min="0" style="width: 100%" />
-                </el-form-item>
-                <el-form-item label="持续 > (s)" style="flex: 1">
-                  <el-input-number v-model="(formData.conditions as any).duration_gt" :min="0" style="width: 100%" />
-                </el-form-item>
+              <div style="display: flex; flex-direction: column; gap: 10px">
+                <div style="display: flex; gap: 10px; align-items: center">
+                  <span style="width: 80px">字节速率</span>
+                  <el-select v-model="(formData.conditions as any).byte_rate_op" placeholder="操作符" style="width: 100px">
+                    <el-option v-for="op in operatorOptions" :key="op.value" :label="op.label" :value="op.value" />
+                  </el-select>
+                  <el-input-number v-if="(formData.conditions as any).byte_rate_op !== 'none'"
+                    v-model="(formData.conditions as any).byte_rate_val" :min="0" style="flex: 1" />
+                  <span v-if="(formData.conditions as any).byte_rate_op !== 'none'">B/s</span>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center">
+                  <span style="width: 80px">持续时间</span>
+                  <el-select v-model="(formData.conditions as any).duration_op" placeholder="操作符" style="width: 100px">
+                    <el-option v-for="op in operatorOptions" :key="op.value" :label="op.label" :value="op.value" />
+                  </el-select>
+                  <el-input-number v-if="(formData.conditions as any).duration_op !== 'none'"
+                    v-model="(formData.conditions as any).duration_val" :min="0" style="flex: 1" />
+                  <span v-if="(formData.conditions as any).duration_op !== 'none'">s</span>
+                </div>
               </div>
 
               <el-divider content-position="left">内容特征 (Content)</el-divider>
-              <div style="display: flex; gap: 10px">
-                <el-form-item label="功能码熵 >" style="flex: 1">
-                  <el-input-number v-model="(formData.conditions as any).function_code_entropy_gt" :min="0" :max="1"
-                    :step="0.1" style="width: 100%" />
-                </el-form-item>
-                <el-form-item label="异常评分 >" style="flex: 1">
-                  <el-input-number v-model="(formData.conditions as any).payload_anomaly_score_gt" :min="0"
-                    style="width: 100%" />
-                </el-form-item>
+              <div style="display: flex; flex-direction: column; gap: 10px">
+                <div style="display: flex; gap: 10px; align-items: center">
+                  <span style="width: 80px">功能码熵</span>
+                  <el-select v-model="(formData.conditions as any).function_code_entropy_op" placeholder="操作符"
+                    style="width: 100px">
+                    <el-option v-for="op in operatorOptions" :key="op.value" :label="op.label" :value="op.value" />
+                  </el-select>
+                  <el-input-number v-if="(formData.conditions as any).function_code_entropy_op !== 'none'"
+                    v-model="(formData.conditions as any).function_code_entropy_val" :min="0" :max="1" :step="0.1"
+                    style="flex: 1" />
+                </div>
+                <div style="display: flex; gap: 10px; align-items: center">
+                  <span style="width: 80px">异常评分</span>
+                  <el-select v-model="(formData.conditions as any).payload_anomaly_score_op" placeholder="操作符"
+                    style="width: 100px">
+                    <el-option v-for="op in operatorOptions" :key="op.value" :label="op.label" :value="op.value" />
+                  </el-select>
+                  <el-input-number v-if="(formData.conditions as any).payload_anomaly_score_op !== 'none'"
+                    v-model="(formData.conditions as any).payload_anomaly_score_val" :min="0" style="flex: 1" />
+                </div>
               </div>
 
               <el-divider content-position="left">状态判定</el-divider>
@@ -670,27 +890,59 @@ onMounted(() => {
               <template v-if="formData.actions!.primary_action.action_type === 'throttle'">
                 <el-form-item label="带宽 (Mbps)">
                   <el-input-number v-model="formData.actions!.primary_action.action_params.rate_limit!.bandwidth_mbps"
-                    :min="1" style="width: 100%" />
+                    :min="0.1" :step="0.1" style="width: 100%" />
                 </el-form-item>
                 <el-form-item label="包速率 (PPS)">
                   <el-input-number
                     v-model="formData.actions!.primary_action.action_params.rate_limit!.packets_per_second" :min="1"
                     style="width: 100%" />
                 </el-form-item>
+                <el-form-item label="方向">
+                  <el-select v-model="formData.actions!.primary_action.action_params.rate_limit!.direction"
+                    placeholder="选择方向" style="width: 100%">
+                    <el-option label="流入 (Ingress)" value="ingress" />
+                    <el-option label="流出 (Egress)" value="egress" />
+                    <el-option label="双向 (Both)" value="both" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="超限策略">
+                  <el-select v-model="formData.actions!.primary_action.action_params.rate_limit!.strategy"
+                    placeholder="选择策略" style="width: 100%">
+                    <el-option label="丢弃 (Drop)" value="drop" />
+                    <el-option label="排队 (Queue)" value="queue" />
+                  </el-select>
+                </el-form-item>
+                <el-form-item label="平滑算法">
+                  <el-select v-model="formData.actions!.primary_action.action_params.rate_limit!.smoothing"
+                    placeholder="选择算法" style="width: 100%">
+                    <el-option label="令牌桶 (Token Bucket)" value="token_bucket" />
+                    <el-option label="漏桶 (Leaky Bucket)" value="leaky_bucket" />
+                  </el-select>
+                </el-form-item>
               </template>
 
               <!-- Redirect Params -->
               <template v-if="formData.actions!.primary_action.action_type === 'redirect'">
-                <el-form-item label="目标 (JSON)">
-                  <el-input
-                    :model-value="JSON.stringify(formData.actions!.primary_action.action_params.targets || [], null, 2)"
-                    type="textarea" :rows="3" placeholder='[{"ip": "10.0.0.99", "port": 502}]' @input="(val: string) => {
-                      try {
-                        formData.actions!.primary_action.action_params.targets = JSON.parse(val)
-                      } catch (e) {
-                        // ignore invalid json while typing
-                      }
-                    }" />
+                <el-form-item label="重定向目标">
+                  <div class="redirect-targets">
+                    <div v-for="(target, tIdx) in formData.actions!.primary_action.action_params.targets" :key="tIdx"
+                      class="target-row">
+                      <el-input v-model="target.ip" placeholder="IP 地址" style="width: 150px" />
+                      <el-input :model-value="target.port" placeholder="端口 (留空为任意)" style="width: 140px" @input="(val: string) => {
+                        const cleaned = val.replace(/\D/g, '');
+                        target.port = cleaned ? parseInt(cleaned) : undefined;
+                      }" />
+                      <el-button link type="danger"
+                        @click="formData.actions!.primary_action.action_params.targets.splice(tIdx, 1)">
+                        <el-icon>
+                          <Delete />
+                        </el-icon>
+                      </el-button>
+                    </div>
+                    <el-button type="primary" plain size="small" @click="addRedirectTarget" style="margin-top: 5px">
+                      + 添加目标
+                    </el-button>
+                  </div>
                 </el-form-item>
               </template>
 
@@ -833,6 +1085,10 @@ onMounted(() => {
 
 .priority-value {
   font-weight: bold;
+  color: var(--el-color-primary);
+  }
+  
+  :global(.dark) .priority-value {
   color: var(--cyber-secondary);
 }
 
@@ -928,6 +1184,44 @@ onMounted(() => {
   color: var(--el-text-color-secondary);
     margin-top: 5px;
   }
+.filter-group {
+  background: var(--el-fill-color-lighter);
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--el-border-color-lighter);
+}
+
+.filter-title {
+  font-size: 0.9rem;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: var(--el-text-color-regular);
+}
+
+.filter-row,
+.target-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.op-val-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.unit {
+  font-size: 0.85rem;
+  color: var(--el-text-color-secondary);
+}
+
+.redirect-targets {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
   
   /* Dark mode overrides to maintain Cyberpunk style */
   :global(.dark) .policy-drawer :deep(.el-drawer__header) {
@@ -966,10 +1260,21 @@ onMounted(() => {
     background: var(--cyber-row-hover);
     border: 1px solid var(--cyber-table-border);
   }
-  
-  :global(.dark) .form-hint {
-  color: var(--cyber-text-sub);
+:global(.dark) .filter-group {
+  background: var(--cyber-row-hover);
+  border: 1px solid var(--cyber-table-border);
 }
+
+:global(.dark) .filter-title {
+  color: var(--el-text-color-primary);
+}
+  
+                :global(.dark) .unit {
+                  color: var(--cyber-text-sub);
+                }
+  :global(.dark) .form-hint {
+    color: var(--cyber-text-sub);
+    }
 
 /* 修复表格斑马纹背景色 */
 :deep(.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell) {

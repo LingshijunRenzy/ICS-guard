@@ -1,5 +1,5 @@
 ryu>=4.34
 networkx>=2.5
 PyJWT>=2.0.0
-eventlet>=0.30.0
+eventlet==0.30.2
 webob>=1.8.0

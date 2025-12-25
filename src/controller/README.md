@@ -36,7 +36,7 @@ pip install -r requirements.txt
 ```bash
 # 启动 Ryu 控制器应用
 # 注意：需要同时加载 sdn_controller.py (核心逻辑) 和 api.py (REST API)
-ryu-manager sdn_controller.py api.py
+ryu-manager sdn_controller.py --observe-links
 ```
 
 控制器默认监听端口：

@@ -52,13 +52,13 @@ class NotificationManager:
             for ws in to_remove:
                 self.ws_clients[channel].remove(ws)
 
-    def push_topology_change(self, change_type, data):
+    def push_topology_change(self, change_type, details):
         payload = {
             'event': 'topology_change',
             'timestamp': datetime.utcnow().isoformat(),
             'data': {
                 'change_type': change_type,
-                **data
+                'details': details
             }
         }
         self.broadcast('topology-changes', payload)

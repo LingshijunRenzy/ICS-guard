@@ -19,18 +19,39 @@ const query = reactive({
 const eventTypes = [
     { label: '全部类型', value: '' },
     { label: '网络状态', value: 'network_status_update' },
+    { label: '节点指标', value: 'node_metrics_update' },
     { label: '流量异常', value: 'traffic_anomaly' },
     { label: '蜜罐交互', value: 'honeypot_interaction' },
     { label: '拓扑变更', value: 'topology_change' },
-    { label: '流更新', value: 'flow_update' },
+    { label: '检测结果', value: 'flow_detection_result' },
+    { label: '流量阻断', value: 'traffic_block' },
+    { label: '流量重定向', value: 'traffic_redirect' },
 ]
+
+const eventTypeMap: Record<string, string> = {
+    'network_status_update': '网络状态',
+    'node_metrics_update': '节点指标',
+    'traffic_anomaly': '流量异常',
+    'honeypot_interaction': '蜜罐交互',
+    'topology_change': '拓扑变更',
+    'flow_detection_result': '检测结果',
+    'traffic_block': '流量阻断',
+    'traffic_redirect': '流量重定向',
+}
+
+const severityMap: Record<string, string> = {
+    'info': '信息',
+    'warning': '警告',
+    'high': '高危',
+    'critical': '紧急',
+}
 
 const severities = [
     { label: '全部等级', value: '' },
-    { label: 'Info', value: 'info' },
-    { label: 'Warning', value: 'warning' },
-    { label: 'High', value: 'high' },
-    { label: 'Critical', value: 'critical' },
+    { label: '信息', value: 'info' },
+    { label: '警告', value: 'warning' },
+    { label: '高危', value: 'high' },
+    { label: '紧急', value: 'critical' },
 ]
 
 async function loadData() {
@@ -73,11 +94,19 @@ function formatPayload(payload: string | null) {
     }
 }
 
+function getTypeText(type: string) {
+    return eventTypeMap[type] || type
+}
+
+function getSeverityText(severity: string) {
+    return severityMap[severity] || severity.toUpperCase()
+}
+
 function getTypeClass(type: string) {
-    if (type === 'traffic_anomaly') return 'cli-tag-dangerous'
-    if (type === 'honeypot_interaction') return 'cli-tag-suspicious'
-    if (type === 'network_status_update') return 'cli-tag-primary'
-    if (type === 'flow_detection') return 'cli-tag-secondary'
+    if (type === 'traffic_anomaly' || type === 'traffic_block') return 'cli-tag-dangerous'
+    if (type === 'honeypot_interaction' || type === 'traffic_redirect') return 'cli-tag-suspicious'
+    if (type === 'network_status_update' || type === 'node_metrics_update') return 'cli-tag-primary'
+    if (type === 'flow_detection_result') return 'cli-tag-secondary'
     return 'cli-tag-info'
 }
 
@@ -111,28 +140,29 @@ onMounted(() => {
 
             <el-table :data="logs" v-loading="loading" style="width: 100%" class="cyber-table">
                 <el-table-column prop="id" label="ID" width="80" />
-                <el-table-column prop="timestamp" label="TIME" width="180">
+                <el-table-column prop="timestamp" label="时间" width="180">
                     <template #default="{ row }">
                         <span class="mono-text">{{ new Date(row.timestamp).toLocaleString() }}</span>
                     </template>
                 </el-table-column>
-                <el-table-column prop="type" label="TYPE" width="180">
+                <el-table-column prop="type" label="类型" width="150">
                     <template #default="{ row }">
-                        <div :class="['cli-tag', getTypeClass(row.type)]">{{ row.type }}</div>
+                        <div :class="['cli-tag', getTypeClass(row.type)]">{{ getTypeText(row.type) }}</div>
                     </template>
                 </el-table-column>
-                <el-table-column prop="severity" label="SEVERITY" width="100">
+                <el-table-column prop="severity" label="等级" width="100">
                     <template #default="{ row }">
-                        <span :class="`severity-${row.severity}`">{{ row.severity.toUpperCase() }}</span>
+                        <span :class="`severity-${row.severity}`">{{ getSeverityText(row.severity) }}</span>
                     </template>
                 </el-table-column>
-                <el-table-column prop="resource" label="RESOURCE" width="200" show-overflow-tooltip />
-                <el-table-column prop="source" label="SOURCE" width="120" />
-                <el-table-column label="PAYLOAD" min-width="300">
+                <el-table-column prop="resource" label="相关资源" width="180" show-overflow-tooltip />
+                <el-table-column prop="source" label="来源" width="120" />
+                <el-table-column prop="processed_by" label="处理组件" width="150" />
+                <el-table-column prop="payload" label="详情数据" min-width="300" show-overflow-tooltip>
                     <template #default="{ row }">
                         <el-popover placement="left" :width="400" trigger="click">
                             <template #reference>
-                                <el-button link type="primary" size="small">VIEW DETAILS</el-button>
+                                <span class="mono-text clickable-payload">{{ row.payload }}</span>
                             </template>
                             <pre class="json-preview">{{ formatPayload(row.payload) }}</pre>
                         </el-popover>
@@ -196,6 +226,16 @@ onMounted(() => {
     font-size: 0.9em;
 }
 
+.clickable-payload {
+    cursor: pointer;
+    color: var(--cyber-primary);
+    opacity: 0.8;
+}
+
+.clickable-payload:hover {
+    opacity: 1;
+    text-decoration: underline;
+}
 .severity-info {
     color: var(--cyber-text-main);
 }

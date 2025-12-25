@@ -32,7 +32,7 @@ class SDNController(app_manager.RyuApp):
         self.topology = TopologyManager(self, self.notification)
         self.traffic = TrafficMonitor(self, self.notification, self.topology)
         self.policy = PolicyManager()
-        self.forwarding = ForwardingEngine(self.topology, self.policy)
+        self.forwarding = ForwardingEngine(self.topology, self.policy, self.notification)
         
         # Register WSGI App
         wsgi = kwargs['wsgi']

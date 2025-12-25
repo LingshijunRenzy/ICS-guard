@@ -28,12 +28,29 @@ DATABASE_URL = os.environ.get("ICS_GUARD_DATABASE_URL", DEFAULT_DATABASE_URL)
 
 # 创建引擎
 # - SQLite 需要 check_same_thread=False 以支持多线程
-# - PostgreSQL 等其他数据库不需要此参数
+# - 增加 timeout 以减少 "database is locked" 错误
 _engine_kwargs = {}
 if DATABASE_URL.startswith("sqlite"):
-    _engine_kwargs["connect_args"] = {"check_same_thread": False}
+    _engine_kwargs["connect_args"] = {
+        "check_same_thread": False,
+        "timeout": 30  # 增加到 30 秒
+    }
 
 engine = create_engine(DATABASE_URL, echo=False, **_engine_kwargs)
+
+# 为 SQLite 启用 WAL 模式以提高并发性能
+if DATABASE_URL.startswith("sqlite"):
+    from sqlalchemy import event
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+        except Exception:
+            pass
+        finally:
+            cursor.close()
 
 # 会话工厂
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

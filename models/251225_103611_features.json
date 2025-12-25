@@ -1,0 +1,21 @@
+[
+  "duration",
+  "sPackets",
+  "rPackets",
+  "sBytesSum",
+  "rBytesSum",
+  "sLoad",
+  "rLoad",
+  "sttl",
+  "rttl",
+  "sSynRate",
+  "rSynRate",
+  "sAckRate",
+  "rAckRate",
+  "sFinRate",
+  "rFinRate",
+  "sRstRate",
+  "rRstRate",
+  "pkt_rate",
+  "byte_rate"
+]
