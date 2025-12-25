@@ -1145,7 +1145,7 @@ const connectWebSocket = () => {
               linkObjects.forEach(link => {
                 const sId = typeof link.source === 'string' ? link.source : link.source.id
                 const tId = typeof link.target === 'string' ? link.target : link.target.id
-                
+
                 if (sId === nodeId || tId === nodeId) {
                   linksToRemove.push(link)
                 } else {
@@ -1222,14 +1222,16 @@ const connectWebSocket = () => {
             const index = linkObjects.findIndex(l => l.data.id === linkId)
             if (index !== -1) {
               const linkObj = linkObjects[index]
-              scene.remove(linkObj.threeMesh)
-              linkObjects.splice(index, 1)
-              if (simulation) {
-                const linkForce = simulation.force('link') as d3.ForceLink<NodeObject, LinkObject>
-                if (linkForce) {
-                  linkForce.links(linkObjects)
+              if (linkObj) {
+                scene.remove(linkObj.threeMesh)
+                linkObjects.splice(index, 1)
+                if (simulation) {
+                  const linkForce = simulation.force('link') as d3.ForceLink<NodeObject, LinkObject>
+                  if (linkForce) {
+                    linkForce.links(linkObjects)
+                  }
+                  simulation.alpha(0.3).restart()
                 }
-                simulation.alpha(0.3).restart()
               }
             }
           }
