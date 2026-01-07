@@ -13,6 +13,7 @@ torch>=2.3.0
 websockets>=12.0
 requests>=2.32.0
 matplotlib>=3.7.0
+joblib>=1.3.0
 
 # 数据库
 sqlalchemy>=2.0.0

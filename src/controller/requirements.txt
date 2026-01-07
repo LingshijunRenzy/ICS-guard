@@ -3,3 +3,8 @@ networkx>=2.5
 PyJWT>=2.0.0
 eventlet==0.30.2
 webob>=1.8.0
+
+# Tools & Traffic Generator dependencies
+requests>=2.25.0
+pymodbus>=3.0.0
+scapy>=2.4.0
